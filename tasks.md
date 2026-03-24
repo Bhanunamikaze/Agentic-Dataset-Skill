@@ -53,7 +53,7 @@
 | T23 | Judge prompt hardening | Tighten `sub-skills/llm-judge.md` so review outputs are strictly raw JSONL with no conversational filler that would break `verify.py`. | `completed` |
 | T24 | Default sizing and prompt examples | Default generation requests to 500 records unless the user specifies another size, and add richer natural-language prompt examples for users. | `completed` |
 | T25 | Schema-validation CI fix | Validate only canonical schema fields under `jsonschema` so DB/runtime metadata does not cause CI-only record rejection, and add a regression test for the strict-validator path. | `completed` |
-| T26 | Packaging metadata | Add `pyproject.toml`, `requirements.txt`, and align CI/dependency installation with the declared runtime dependencies. | `completed` |
+| T26 | Dependency metadata | Add `requirements.txt` and align CI/dependency installation with the declared runtime dependency set. | `completed` |
 | T27 | Governance docs | Add `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md` so usage, disclosure, and contribution paths are explicit. | `completed` |
 | T28 | Install hardening | Fix the repo URL in `install.sh`, add checksum-based remote-install guidance, and publish `install.sh.sha256`. | `completed` |
 | T29 | Untrusted-ingestion guardrails | Strip hostile control characters during normalization, flag likely prompt-injection markers on untrusted sources, and surface review flags in metadata and skill docs. | `completed` |
@@ -87,3 +87,4 @@
 - 2026-03-24: Fixed CI-only schema validation failures by projecting records onto the canonical schema before `jsonschema` validation, and added a regression test for strict-validator behavior.
 - 2026-03-24: Added packaging metadata, governance/security docs, install checksum guidance, untrusted-ingestion guardrails, and a stronger public-facing README.
 - 2026-03-24: Switched `install.sh` to an allowlist runtime payload, and added a tag-triggered GitHub Actions packaging job that publishes release assets for the skill bundle.
+- 2026-03-24: Removed `pyproject.toml` to keep the repo aligned with skill-runtime reality; retained `requirements.txt` as the only dependency declaration.
