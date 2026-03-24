@@ -1,5 +1,10 @@
 # Architecture Notes
 
+Architecture visuals:
+
+- [`docs/media/dataset-skill-architecture.svg`](./media/dataset-skill-architecture.svg)
+- [`docs/media/industry-pipeline.svg`](./media/industry-pipeline.svg)
+
 ## Diagram Mapping
 
 The plan diagrams define four main layers:

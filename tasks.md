@@ -6,8 +6,8 @@
 - Goal: Build an agentic dataset generation skill for Codex, Antigravity, and Claude Code that supports SFT and DPO workflows, tool-guided data collection, resumable SQLite state, verification, deduplication, export, and data-card generation.
 - Source documents:
   - `Plan/plan.md`
-  - `Plan/dataset_skill_architecture.svg`
-  - `Plan/llm_dataset_industry_pipeline.svg`
+  - `docs/media/dataset-skill-architecture.svg`
+  - `docs/media/industry-pipeline.svg`
 
 ## Confirmed Decisions
 
@@ -70,3 +70,4 @@
 - 2026-03-24: Added unit/integration tests and a GitHub Actions CI workflow; validated local compile checks and `unittest` execution.
 - 2026-03-24: Tightened flat export schema validation and expanded export summaries/data cards with richer dataset statistics; validated with updated tests.
 - 2026-03-24: Fixed imported draft status promotion in `generate.py`, tightened orchestration/sub-skill routing, and added GitHub-facing docs for architecture and workflows.
+- 2026-03-24: Moved architecture SVGs into `docs/media/` and reshaped the README around the `Agentic-SEO-Skill` documentation style.

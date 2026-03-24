@@ -106,6 +106,7 @@ copy_skill() {
             --exclude ".venv/" \
             --exclude "Plan/" \
             --exclude "tasks.md" \
+            --exclude "docs/" \
             --exclude ".gitignore" \
             --exclude "README*" \
             --exclude "LICENSE*" \
@@ -132,6 +133,8 @@ copy_skill() {
                 --exclude="Plan" \
                 --exclude="Plan/*" \
                 --exclude="tasks.md" \
+                --exclude="docs" \
+                --exclude="docs/*" \
                 --exclude=".gitignore" \
                 --exclude="README*" \
                 --exclude="LICENSE*" \
