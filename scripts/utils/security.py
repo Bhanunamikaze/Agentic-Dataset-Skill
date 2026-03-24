@@ -41,7 +41,12 @@ def sanitize_text(value: Any) -> tuple[Any, bool]:
     return cleaned, cleaned != value
 
 
-def sanitize_record(record: dict[str, Any], *, source_type: str) -> dict[str, Any]:
+def sanitize_record(
+    record: dict[str, Any],
+    *,
+    source_type: str,
+    allow_injections: bool = False,
+) -> dict[str, Any]:
     sanitized = dict(record)
     metadata = dict(sanitized.get("metadata") or {})
     changed = False
@@ -80,10 +85,13 @@ def sanitize_record(record: dict[str, Any], *, source_type: str) -> dict[str, An
     flags: set[str] = set()
     if source_type in UNTRUSTED_SOURCE_TYPES:
         metadata["untrusted_ingestion"] = True
-        for label, text in text_fields:
-            for flag_name, pattern in PROMPT_INJECTION_PATTERNS:
-                if pattern.search(text):
-                    flags.add(f"{label}:{flag_name}")
+        if allow_injections:
+            metadata["allow_injections"] = True
+        else:
+            for label, text in text_fields:
+                for flag_name, pattern in PROMPT_INJECTION_PATTERNS:
+                    if pattern.search(text):
+                        flags.add(f"{label}:{flag_name}")
 
     if changed:
         metadata["sanitization_applied"] = True

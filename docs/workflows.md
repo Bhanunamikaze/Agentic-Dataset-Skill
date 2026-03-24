@@ -28,6 +28,12 @@ Use this when the user already has a file and wants an audit.
 
 This preserves lineage and keeps the verify-only path resumable.
 
+## Adversarial Security Data
+
+If the dataset intentionally contains prompt injections, jailbreaks, or system-prompt-leak examples, import with `--allow-injections`.
+
+This bypasses prompt-injection regex flagging while still preserving control-character cleanup and normal canonicalization.
+
 ## Export Flow
 
 Use this when the verified data already exists in SQLite.

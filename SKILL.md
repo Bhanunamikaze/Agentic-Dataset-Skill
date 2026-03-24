@@ -81,6 +81,8 @@ python3 scripts/generate.py --input <drafts.jsonl> --source-type <generated|url_
 ```
 
 Imported drafts are promoted into the runnable pipeline with status `raw_generated` unless they are explicit placeholder seeds.
+
+If the user is intentionally building prompt-injection, jailbreak, or system-prompt-leak training data, add `--allow-injections` to import steps so those examples are preserved while control-character sanitization still runs.
 For untrusted sources, normalization also strips hostile control characters and may add `metadata.security_flags` plus `metadata.requires_manual_review`.
 
 For generation requests, do not treat a small sample as the finished dataset unless the user explicitly asked for a small sample, prototype, or test run.
@@ -137,6 +139,8 @@ python3 scripts/export.py --format csv --split 0.0
 ```
 
 Prefer the DB-backed route above so the audit remains resumable and traceable.
+
+For intentionally adversarial security corpora, add `--allow-injections` to the generate or verify import command.
 
 ### 3. `dataset export`
 

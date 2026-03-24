@@ -58,6 +58,7 @@
 | T29 | Untrusted-ingestion guardrails | Strip hostile control characters during normalization, flag likely prompt-injection markers on untrusted sources, and surface review flags in metadata and skill docs. | `completed` |
 | T30 | README polish | Add a CI badge, GitHub metadata guidance, safer install guidance, 500-record rationale, security notes, and a roadmap section. | `completed` |
 | T31 | Lean install payload and tag packaging | Restrict `install.sh` to the runtime skill payload only, and on tag pushes build and publish packaged runtime artifacts in GitHub Actions. | `completed` |
+| T32 | Adversarial dataset safety controls | Allow intentional prompt-injection corpora to bypass injection flagging during import, expand refusal heuristics, and harden placeholder detection. | `completed` |
 
 ## Open Technical Notes
 
@@ -87,3 +88,4 @@
 - 2026-03-24: Added packaging metadata, governance/security docs, install checksum guidance, untrusted-ingestion guardrails, and a stronger public-facing README.
 - 2026-03-24: Switched `install.sh` to an allowlist runtime payload, and added a tag-triggered GitHub Actions packaging job that publishes release assets for the skill bundle.
 - 2026-03-24: Removed `pyproject.toml` to keep the repo aligned with skill-runtime reality; retained `requirements.txt` as the only dependency declaration.
+- 2026-03-24: Added `--allow-injections` support for intentional adversarial-security datasets, expanded soft-refusal detection, and made placeholder heuristics case-insensitive.

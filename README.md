@@ -17,7 +17,7 @@ An agentic dataset-generation skill for agent IDEs, built around tool-native rea
 - Shared utility modules: `5`
 - Internal canonical schema: `1`
 - Preset export schemas: `3`
-- Automated tests: `8`
+- Automated tests: `11`
 
 
 ## Features
@@ -92,6 +92,20 @@ Python dependency install:
 python3 -m pip install -r requirements.txt
 ```
 
+## Adversarial Security Datasets
+
+The runtime sanitizer always strips control characters, but prompt-injection flagging can be relaxed when you are intentionally building red-team or jailbreak training corpora.
+
+Use the import flags below for those cases:
+
+```bash
+python3 scripts/generate.py --input drafts.jsonl --source-type raw_dataset --allow-injections
+python3 scripts/augment.py --input augmented.jsonl --source-type raw_dataset --allow-injections
+python3 scripts/verify.py --input dataset.jsonl --source-type raw_dataset --allow-injections
+```
+
+That bypasses prompt-injection regex flagging while preserving other normalization behavior.
+
 ## Example Prompts
 
 ### How prompts route to the skill
@@ -157,6 +171,8 @@ What is not fully autonomous by design:
 - custom export-schema selection
 
 Those reasoning-heavy phases are handled by the host IDE agent via [`SKILL.md`](./SKILL.md) and [`sub-skills/`](./sub-skills/), which matches the Codex / Antigravity / Claude Code skill model.
+
+`scripts/generate.py` is intentionally an importer/seeder plus SQLite state manager. It does not call external LLM-provider APIs.
 
 ## Architecture
 

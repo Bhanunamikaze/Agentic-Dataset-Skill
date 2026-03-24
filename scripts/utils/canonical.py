@@ -125,8 +125,13 @@ def normalize_record(
     *,
     default_task_type: str = "sft",
     source_type: str = "manual",
+    allow_injections: bool = False,
 ) -> dict[str, Any]:
     record = dict(raw)
+    raw_metadata = record.get("metadata") or {}
+    effective_allow_injections = allow_injections or bool(record.get("allow_injections")) or bool(
+        raw_metadata.get("allow_injections")
+    )
 
     if isinstance(record.get("response"), dict):
         response = dict(record["response"])
@@ -170,7 +175,11 @@ def normalize_record(
         "judge_reason": record.get("judge_reason"),
         "error_message": record.get("error_message"),
     }
-    normalized = sanitize_record(normalized, source_type=normalized["source_type"])
+    normalized = sanitize_record(
+        normalized,
+        source_type=normalized["source_type"],
+        allow_injections=effective_allow_injections,
+    )
     if not normalized["id"]:
         normalized["id"] = build_record_id(
             {

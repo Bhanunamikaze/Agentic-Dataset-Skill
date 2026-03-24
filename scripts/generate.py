@@ -24,7 +24,7 @@ from scripts.utils.schema import validate_record
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Load canonical dataset drafts or deterministic seeds into the SQLite run state."
+        description="Load canonical dataset drafts or deterministic seeds into the SQLite run state. This script does not call external LLM APIs."
     )
     parser.add_argument("--input", help="Path to a JSON, JSONL, or CSV file of draft records.")
     parser.add_argument("--topic", help="Topic used to create deterministic seed placeholder rows.")
@@ -44,6 +44,11 @@ def parse_args() -> argparse.Namespace:
         "--source-type",
         default="generated",
         help="Source type metadata for created/imported records.",
+    )
+    parser.add_argument(
+        "--allow-injections",
+        action="store_true",
+        help="Allow prompt-injection and jailbreak-like strings during import for intentional adversarial-security datasets.",
     )
     parser.add_argument("--run-id", help="Optional run identifier. Defaults to a generated UUID.")
     parser.add_argument(
@@ -90,6 +95,7 @@ def load_or_seed_records(args: argparse.Namespace) -> list[dict[str, Any]]:
                 item,
                 default_task_type=default_task_type,
                 source_type=args.source_type,
+                allow_injections=args.allow_injections,
             )
             for item in raw_records
         ]
@@ -122,6 +128,7 @@ def main() -> None:
         "run_id": run_id,
         "db_path": str(db_path),
         "source_type": args.source_type,
+        "allow_injections": args.allow_injections,
         "imported": 0,
         "failed": 0,
         "record_ids": [],

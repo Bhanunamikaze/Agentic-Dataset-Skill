@@ -28,13 +28,17 @@ REFUSAL_PATTERNS = [
         r"\bi cannot\b",
         r"\bi can'?t\b",
         r"\bi will not\b",
+        r"\bi apologize, but\b",
+        r"\bagainst my ethical guidelines\b",
+        r"\bas an ai assistant\b",
         r"\bas an ai language model\b",
         r"\bi am unable to comply\b",
+        r"\bi cannot fulfill this\b",
         r"\bi can'?t help with that\b",
         r"\bi must refuse\b",
     )
 ]
-PLACEHOLDER_PATTERN = re.compile(r"\[PENDING_[A-Z_]+\]")
+PLACEHOLDER_PATTERN = re.compile(r"\[PENDING_[A-Z_]+\]", re.IGNORECASE)
 
 
 def parse_args() -> argparse.Namespace:
@@ -74,6 +78,11 @@ def parse_args() -> argparse.Namespace:
         "--source-type",
         default="generated",
         help="Source type metadata for imported records when --input is used.",
+    )
+    parser.add_argument(
+        "--allow-injections",
+        action="store_true",
+        help="Allow prompt-injection and jailbreak-like strings during direct file import for intentional adversarial-security datasets.",
     )
     parser.add_argument(
         "--min-instruction-length",
@@ -142,7 +151,12 @@ def load_records_for_verification(
 ) -> list[dict[str, Any]]:
     if args.input:
         return [
-            normalize_record(item, default_task_type="sft", source_type=args.source_type)
+            normalize_record(
+                item,
+                default_task_type="sft",
+                source_type=args.source_type,
+                allow_injections=args.allow_injections,
+            )
             for item in load_records(args.input)
         ]
 
@@ -187,6 +201,7 @@ def main() -> None:
         summary: dict[str, Any] = {
             "run_id": run_id,
             "db_path": str(db_path),
+            "allow_injections": args.allow_injections,
             "verified_pass": 0,
             "verified_fail": 0,
             "judge_pending": 0,

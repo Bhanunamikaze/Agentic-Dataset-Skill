@@ -75,6 +75,11 @@ def parse_args() -> argparse.Namespace:
         help="Source type metadata for augmented records.",
     )
     parser.add_argument(
+        "--allow-injections",
+        action="store_true",
+        help="Allow prompt-injection and jailbreak-like strings during import for intentional adversarial-security datasets.",
+    )
+    parser.add_argument(
         "--db",
         default=None,
         help="Optional path to the SQLite database. Defaults to workspace/run_state.sqlite.",
@@ -86,7 +91,12 @@ def parse_args() -> argparse.Namespace:
 def load_input_records(args: argparse.Namespace) -> list[dict[str, Any]]:
     raw_records = load_records(args.input)
     return [
-        normalize_record(item, default_task_type="sft", source_type=args.source_type)
+        normalize_record(
+            item,
+            default_task_type="sft",
+            source_type=args.source_type,
+            allow_injections=args.allow_injections,
+        )
         for item in raw_records
     ]
 
@@ -160,6 +170,7 @@ def main() -> None:
         summary: dict[str, Any] = {
             "run_id": run_id,
             "db_path": str(db_path),
+            "allow_injections": args.allow_injections,
             "augmented": 0,
             "failed": 0,
             "record_ids": [],
