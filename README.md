@@ -19,19 +19,6 @@ An agentic dataset-generation skill for agent IDEs, built around tool-native rea
 - Preset export schemas: `3`
 - Automated tests: `8`
 
-## GitHub Metadata
-
-Recommended repository description:
-
-```text
-Tool-native dataset generation skill for Codex, Claude Code, and Antigravity with SFT/DPO pipelines, verification, deduplication, and flexible export.
-```
-
-Suggested topics:
-
-```text
-llm, dataset-generation, fine-tuning, agentic, codex, claude-code, antigravity, sft, dpo, jsonl, csv
-```
 
 ## Features
 
@@ -48,63 +35,6 @@ llm, dataset-generation, fine-tuning, agentic, codex, claude-code, antigravity, 
 | `deduplicator` | Exact and near-duplicate suppression before export |
 | `formatter-exporter` | Preset and custom flat-schema mapping for final user-facing outputs |
 
-## Automated Pipeline
-
-This repo is an automated pipeline for the deterministic stages:
-
-1. import or seed canonical records
-2. augment records
-3. verify records
-4. deduplicate verified records
-5. export artifacts and generate a data card
-
-What is not fully autonomous by design:
-
-- browsing/search-driven evidence collection
-- taxonomy design
-- semantic judging
-- custom export-schema selection
-
-Those reasoning-heavy phases are handled by the host IDE agent via [`SKILL.md`](./SKILL.md) and [`sub-skills/`](./sub-skills/), which matches the Codex / Antigravity / Claude Code skill model.
-
-## Architecture
-
-Primary skill architecture:
-
-![Dataset skill architecture](./docs/media/dataset-skill-architecture.svg)
-
-Industry-style pipeline phases:
-
-![Industry pipeline](./docs/media/industry-pipeline.svg)
-
-## LLM-First Workflow
-
-This skill follows a reasoning-first pattern:
-
-1. classify the user request
-2. choose `task_type`, `source_type`, and output schema
-3. collect evidence or draft canonical records
-4. run deterministic scripts for stateful processing
-5. export only validated, deduplicated artifacts
-
-The fixed/flexible split is intentional:
-
-- internal canonical schema: fixed
-- final user-facing export schema: flexible
-
-## Default Dataset Size
-
-For generation requests, the default target size is `500` records unless the user explicitly asks for a different number or asks for a small prototype/sample.
-
-Practical rule:
-
-- no size specified -> target `500`
-- explicit size specified -> honor the requested count
-- explicit prototype/sample wording -> smaller output is acceptable
-
-Why `500`:
-
-- it is a practical default that is large enough to produce a usable first-pass dataset while still being realistic for a single agent-driven session
 
 ## Installation (All IDEs)
 
@@ -208,6 +138,65 @@ Normalize this CSV into HuggingFace chat format and deduplicate it.
 Verify this dataset, remove weak examples, and export custom columns: prompt, answer, persona, difficulty.
 ```
 
+
+## Automated Pipeline
+
+This repo is an automated pipeline for the deterministic stages:
+
+1. import or seed canonical records
+2. augment records
+3. verify records
+4. deduplicate verified records
+5. export artifacts and generate a data card
+
+What is not fully autonomous by design:
+
+- browsing/search-driven evidence collection
+- taxonomy design
+- semantic judging
+- custom export-schema selection
+
+Those reasoning-heavy phases are handled by the host IDE agent via [`SKILL.md`](./SKILL.md) and [`sub-skills/`](./sub-skills/), which matches the Codex / Antigravity / Claude Code skill model.
+
+## Architecture
+
+Primary skill architecture:
+
+![Dataset skill architecture](./docs/media/dataset-skill-architecture.svg)
+
+Industry-style pipeline phases:
+
+![Industry pipeline](./docs/media/industry-pipeline.svg)
+
+## LLM-First Workflow
+
+This skill follows a reasoning-first pattern:
+
+1. classify the user request
+2. choose `task_type`, `source_type`, and output schema
+3. collect evidence or draft canonical records
+4. run deterministic scripts for stateful processing
+5. export only validated, deduplicated artifacts
+
+The fixed/flexible split is intentional:
+
+- internal canonical schema: fixed
+- final user-facing export schema: flexible
+
+## Default Dataset Size
+
+For generation requests, the default target size is `500` records unless the user explicitly asks for a different number or asks for a small prototype/sample.
+
+Practical rule:
+
+- no size specified -> target `500`
+- explicit size specified -> honor the requested count
+- explicit prototype/sample wording -> smaller output is acceptable
+
+Why `500`:
+
+- it is a practical default that is large enough to produce a usable first-pass dataset while still being realistic for a single agent-driven session
+
 ## Repository Docs
 
 - [Architecture Notes](./docs/architecture.md)
@@ -215,27 +204,12 @@ Verify this dataset, remove weak examples, and export custom columns: prompt, an
 - [Primary Skill Contract](./SKILL.md)
 - [Contributing Guide](./CONTRIBUTING.md)
 - [Security Policy](./SECURITY.md)
-- [Task Tracker](./tasks.md)
+- [Task Tracker](./docs/tasks.md)
 
-## Security Notes
-
-- JSONL and CSV imports should be treated as untrusted input.
-- Normalization strips control characters and flags likely prompt-injection markers on untrusted sources.
-- Review `metadata.security_flags` and `metadata.requires_manual_review` before semantic judging or export.
-- The judge instructions explicitly require treating record content as data, not instructions.
 
 ## Roadmap
 
 - Add a dedicated local collector for URL and web-evidence ingestion instead of relying entirely on host-IDE collection.
 - Add a standalone `dataset card` command if users want card generation decoupled from export.
 - Move toward stronger artifact versioning and per-run workspace layout once larger datasets become a primary use case.
-- Migrate backlog items from `tasks.md` into GitHub Issues and milestones.
-
-## Validation
-
-Run locally:
-
-```bash
-python3 -m pip install -r requirements.txt
-python3 -m unittest discover -s tests -p 'test*.py'
-```
+- Migrate backlog items from `docs/tasks.md` into GitHub Issues and milestones.

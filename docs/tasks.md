@@ -5,7 +5,6 @@
 - Status: `in_progress`
 - Goal: Build an agentic dataset generation skill for Codex, Antigravity, and Claude Code that supports SFT and DPO workflows, tool-guided data collection, resumable SQLite state, verification, deduplication, export, and data-card generation.
 - Source documents:
-  - `Plan/plan.md`
   - `docs/media/dataset-skill-architecture.svg`
   - `docs/media/industry-pipeline.svg`
 
