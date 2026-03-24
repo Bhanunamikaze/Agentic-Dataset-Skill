@@ -24,10 +24,36 @@ def validate_record(record: dict[str, Any]) -> list[str]:
         return basic_validate_record(record)
 
     validator = Draft202012Validator(load_schema())
-    errors = [error.message for error in validator.iter_errors(record)]
+    errors = [error.message for error in validator.iter_errors(project_record_for_schema(record))]
     if errors:
         return errors
     return basic_validate_record(record)
+
+
+def project_record_for_schema(record: dict[str, Any]) -> dict[str, Any]:
+    schema = load_schema()
+    allowed_keys = set(schema.get("properties", {}).keys())
+    projected = {key: record[key] for key in allowed_keys if key in record}
+
+    lineage = dict(projected.get("lineage") or {})
+    if record.get("run_id") is not None:
+        lineage.setdefault("run_id", record.get("run_id"))
+
+    parent_id = ""
+    metadata = record.get("metadata")
+    if isinstance(metadata, dict):
+        parent_id = str(metadata.get("parent_id") or "")
+    if parent_id:
+        lineage.setdefault("parent_id", parent_id)
+
+    source_uri = record.get("source_uri")
+    if isinstance(source_uri, str) and source_uri:
+        lineage.setdefault("source_path", source_uri)
+
+    if lineage:
+        projected["lineage"] = lineage
+
+    return projected
 
 
 def basic_validate_record(record: dict[str, Any]) -> list[str]:

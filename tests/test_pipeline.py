@@ -6,6 +6,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from types import ModuleType, SimpleNamespace
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -60,6 +62,38 @@ class CanonicalNormalizationTests(unittest.TestCase):
         self.assertEqual(record["response"]["format"], "preference_pair")
         self.assertEqual(record["response"]["chosen"], "Safe answer")
         self.assertEqual(record["response"]["rejected"], "Unsafe answer")
+
+    def test_validate_record_ignores_runtime_only_fields_under_jsonschema(self) -> None:
+        from scripts.utils.canonical import normalize_record
+        from scripts.utils.schema import load_schema, validate_record
+
+        record = normalize_record(
+            {
+                "id": "draft_a",
+                "instruction": "Explain chmod",
+                "context": "",
+                "response": {"format": "single", "text": "chmod changes permissions."},
+                "metadata": {"difficulty": "easy", "persona": "teacher"},
+                "pipeline_status": "pending",
+            },
+            source_type="generated",
+        )
+
+        allowed_keys = set(load_schema()["properties"].keys())
+
+        class FakeValidator:
+            def __init__(self, schema) -> None:
+                self.schema = schema
+
+            def iter_errors(self, payload):
+                extra_keys = sorted(set(payload) - allowed_keys)
+                return [SimpleNamespace(message=f"unexpected keys: {extra_keys}")] if extra_keys else []
+
+        fake_jsonschema = ModuleType("jsonschema")
+        fake_jsonschema.Draft202012Validator = FakeValidator
+
+        with patch.dict(sys.modules, {"jsonschema": fake_jsonschema}):
+            self.assertEqual(validate_record(record), [])
 
 
 class PipelineScriptTests(unittest.TestCase):
