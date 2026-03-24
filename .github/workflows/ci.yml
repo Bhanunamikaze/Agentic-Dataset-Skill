@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install datasketch jsonschema pandas
+
+      - name: Compile scripts
+        run: |
+          python -m py_compile scripts/generate.py scripts/augment.py scripts/verify.py scripts/dedup.py scripts/export.py
+          python -m py_compile scripts/utils/db.py scripts/utils/files.py scripts/utils/schema.py scripts/utils/canonical.py
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -p "test*.py"

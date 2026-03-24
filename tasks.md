@@ -43,6 +43,8 @@
 | T13 | Sub-skill prompts | Create the markdown prompt files in `sub-skills/` for strategy, seeding, diversity, filtering, judging, deduplication guidance, export formatting, data card generation, and verification-only flows. | `completed` |
 | T14 | Skill orchestrator | Create `SKILL.md` as the orchestration entry point for `dataset generate`, `dataset verify`, and `dataset export`, including resume detection and route selection by user intent across the three IDEs. | `completed` |
 | T15 | Verification and QA | Run local smoke checks, validate the schema and scripts, and document any limits tied to local tool availability rather than provider integrations. | `completed` |
+| T16 | Automated tests | Add unit and integration-style tests for canonical normalization, DB-backed pipeline flows, and export schema behavior. | `completed` |
+| T17 | CI workflow | Add a GitHub Actions workflow that installs dependencies and runs compile/test checks on pushes and pull requests. | `completed` |
 
 ## Open Technical Notes
 
@@ -61,3 +63,4 @@
 - 2026-03-24: Implemented and smoke-tested `generate.py` and `augment.py`, including seed creation, SQLite imports, and DB-backed metadata variant generation.
 - 2026-03-24: Implemented and smoke-tested `verify.py`, `dedup.py`, and `export.py`, including review-file adjudication, duplicate suppression, flexible flat-schema export, and automatic data-card generation.
 - 2026-03-24: Added the full sub-skill layer, root `SKILL.md`, custom export-schema template, and final installer exclusions; validated Codex/Antigravity installs and custom-schema export behavior.
+- 2026-03-24: Added unit/integration tests and a GitHub Actions CI workflow; validated local compile checks and `unittest` execution.
