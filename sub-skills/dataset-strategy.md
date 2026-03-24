@@ -40,9 +40,19 @@ Produce a concise plan with:
 - request type
 - task type
 - source mode
+- source type
 - target format
 - target schema or custom column list
 - intended example count
 - taxonomy buckets
 - quality requirements
+- resume or fresh-run decision
 
+## Source-type mapping
+
+- Topic-driven generation -> `generated`
+- URL/reference-material structuring -> `url_reference`
+- Existing dataset normalization -> `raw_dataset`
+- Internet-research collection -> `internet_research`
+
+Always state the chosen `source_type` explicitly before moving into the script layer.

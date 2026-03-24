@@ -47,6 +47,8 @@
 | T17 | CI workflow | Add a GitHub Actions workflow that installs dependencies and runs compile/test checks on pushes and pull requests. | `completed` |
 | T18 | Export schema validation | Validate custom flat export schemas strictly before export runs and fail with actionable errors. | `completed` |
 | T19 | Richer export reporting | Expand export summaries and generated data cards with column lists, distributions, artifact lists, and run metadata. | `completed` |
+| T20 | Skill behavior tightening | Tighten the orchestration contract in `SKILL.md` and sub-skills so each route maps clearly to the deterministic script layer. | `completed` |
+| T21 | GitHub documentation | Add GitHub-facing repository documentation for installation, architecture, workflows, and current gaps. | `completed` |
 
 ## Open Technical Notes
 
@@ -67,3 +69,4 @@
 - 2026-03-24: Added the full sub-skill layer, root `SKILL.md`, custom export-schema template, and final installer exclusions; validated Codex/Antigravity installs and custom-schema export behavior.
 - 2026-03-24: Added unit/integration tests and a GitHub Actions CI workflow; validated local compile checks and `unittest` execution.
 - 2026-03-24: Tightened flat export schema validation and expanded export summaries/data cards with richer dataset statistics; validated with updated tests.
+- 2026-03-24: Fixed imported draft status promotion in `generate.py`, tightened orchestration/sub-skill routing, and added GitHub-facing docs for architecture and workflows.

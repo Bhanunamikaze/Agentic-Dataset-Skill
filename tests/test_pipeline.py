@@ -63,6 +63,49 @@ class CanonicalNormalizationTests(unittest.TestCase):
 
 
 class PipelineScriptTests(unittest.TestCase):
+    def test_generate_import_promotes_pending_input_to_raw_generated(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            db_path = temp_dir / "state.sqlite"
+            input_path = temp_dir / "drafts.jsonl"
+
+            input_path.write_text(
+                json.dumps(
+                    {
+                        "id": "draft_a",
+                        "instruction": "Explain chmod",
+                        "context": "",
+                        "response": {"format": "single", "text": "chmod changes permissions."},
+                        "metadata": {"difficulty": "easy", "persona": "teacher"},
+                        "pipeline_status": "pending",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            run_script(
+                "scripts/generate.py",
+                "--input",
+                str(input_path),
+                "--db",
+                str(db_path),
+                "--tool-context",
+                "codex",
+            )
+
+            connection = sqlite3.connect(db_path)
+            try:
+                row = connection.execute(
+                    "SELECT status FROM records WHERE id = ?",
+                    ("draft_a",),
+                ).fetchone()
+            finally:
+                connection.close()
+
+            self.assertIsNotNone(row)
+            self.assertEqual(row[0], "raw_generated")
+
     def test_verify_dedup_and_export_flow(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir_name:
             temp_dir = Path(temp_dir_name)

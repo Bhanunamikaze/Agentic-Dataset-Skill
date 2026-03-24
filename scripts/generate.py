@@ -143,7 +143,11 @@ def main() -> None:
         for record in records:
             record["run_id"] = run_id
             record["source_type"] = args.source_type
-            record["status"] = record.get("status") or infer_status(record)
+            record_status = str(record.get("status") or "").strip()
+            if not record_status or record_status == "pending":
+                record["status"] = infer_status(record)
+            else:
+                record["status"] = record_status
 
             errors = validate_record(record)
             if errors:

@@ -34,6 +34,17 @@ Write draft records to a JSONL file, then load them with:
 python3 scripts/generate.py --input <drafts.jsonl> --source-type <generated|url_reference|raw_dataset|internet_research> --tool-context <codex|claude|antigravity>
 ```
 
+The imported drafts will enter the pipeline as `raw_generated` records unless they still contain explicit placeholder responses, in which case they remain `seeded`.
+
+## Required metadata
+
+Each canonical record should carry enough metadata for later export and audit:
+
+- `difficulty`
+- `persona`
+- `source_type`
+- optional provenance such as `reference_urls`, tags, source path, or notes
+
 ## Seed-only fallback
 
 If you only need placeholder slots before writing full examples:
@@ -41,4 +52,3 @@ If you only need placeholder slots before writing full examples:
 ```bash
 python3 scripts/generate.py --topic "<topic>" --count <n> --task-type <sft|dpo>
 ```
-

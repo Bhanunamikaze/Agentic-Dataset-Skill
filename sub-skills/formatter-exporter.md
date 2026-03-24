@@ -23,6 +23,13 @@ Each column uses:
 - `name`: the exported header
 - `source`: a dotted path from canonical data, for example `instruction` or `metadata.difficulty`
 
+Validation rules:
+
+- schema `mode` must be `flat`
+- `columns` must be a non-empty list
+- every `name` must be unique and non-empty
+- every `source` must be a non-empty dotted path
+
 ## Commands
 
 Preset export:
@@ -44,4 +51,3 @@ python3 scripts/export.py --format jsonl --schema-file <custom_schema.json> --sp
 ```
 
 Reference notes: `resources/references/export-schema-pattern.md`
-
