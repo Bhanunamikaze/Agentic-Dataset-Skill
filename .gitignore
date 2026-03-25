@@ -7,3 +7,5 @@ workspace/*.jsonl
 workspace/*.csv
 workspace/*.json
 workspace/DATA_CARD.md
+.agent/*
+.agents/*
