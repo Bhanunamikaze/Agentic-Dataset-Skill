@@ -175,7 +175,7 @@ while ($idx -lt $args.Count) {
     }
     '--online' {
       $ONLINE_MODE = $true
-      $TARGET = 'global'
+      $TARGET = 'all'
       $idx += 1
       continue
     }
@@ -282,8 +282,16 @@ try {
   Write-Host ''
 
   if ($TARGET -in @('antigravity', 'all')) {
-    $AG_DIR = Join-Path (Join-Path $PROJECT_DIR '.agent/skills') $SKILL_NAME
-    Copy-Skill -Src $SRC_DIR -Dest $AG_DIR -Label 'antigravity'
+    try {
+      $AG_DIR = Join-Path (Join-Path $PROJECT_DIR '.agent/skills') $SKILL_NAME
+      $destParent = Split-Path -Path $AG_DIR -Parent
+      if (-not (Test-Path -LiteralPath $destParent)) {
+        New-Item -ItemType Directory -Path $destParent -Force -ErrorAction Stop | Out-Null
+      }
+      Copy-Skill -Src $SRC_DIR -Dest $AG_DIR -Label 'antigravity'
+    } catch {
+      Write-Warning "Skipped antigravity install: Could not write to project directory $PROJECT_DIR (run from a project directory if needed)"
+    }
   }
 
   if ($TARGET -in @('claude', 'global', 'all')) {
