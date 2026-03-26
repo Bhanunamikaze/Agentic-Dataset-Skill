@@ -12,6 +12,14 @@ if __name__ == "__main__" or not getattr(sys.modules.get(__name__, None), "__pac
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.utils.canonical import normalize_record, row_to_record
+from scripts.utils.coverage_plan import (
+    ensure_string_list,
+    is_missing_value,
+    load_plan,
+    plan_required_fields,
+    resolve_path,
+    values_for_field,
+)
 from scripts.utils.db import (
     fetch_records_by_status,
     get_connection,
@@ -50,6 +58,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--review-file",
         help="Optional JSON, JSONL, or CSV file keyed by record id with score, reason, and pass/fail status.",
+    )
+    parser.add_argument(
+        "--plan-file",
+        help="Optional coverage/quality plan used to enforce required fields and provenance rules.",
     )
     parser.add_argument(
         "--from-status",
@@ -122,7 +134,7 @@ def response_texts(record: dict[str, Any]) -> list[str]:
     return [str(response.get("text", ""))]
 
 
-def heuristic_errors(record: dict[str, Any], args: argparse.Namespace) -> list[str]:
+def heuristic_errors(record: dict[str, Any], args: argparse.Namespace, plan: dict[str, Any] | None = None) -> list[str]:
     errors = validate_record(record)
 
     instruction = str(record.get("instruction", "")).strip()
@@ -142,6 +154,25 @@ def heuristic_errors(record: dict[str, Any], args: argparse.Namespace) -> list[s
             if pattern.search(stripped):
                 errors.append(f"response matched refusal pattern: {pattern.pattern}")
                 break
+
+    plan = plan or {}
+    for field in plan_required_fields(plan):
+        if is_missing_value(resolve_path(record, field)):
+            errors.append(f"required field missing: {field}")
+
+    provenance = plan.get("provenance") or {}
+    if isinstance(provenance, dict):
+        provenance_field = str(provenance.get("field", "metadata.source_origin"))
+        real_world_values = set(ensure_string_list(provenance.get("real_world_values")) or ["real_world"])
+        reference_fields = ensure_string_list(provenance.get("reference_fields"))
+        source_values = {value for value in values_for_field(record, provenance_field) if value != "__missing__"}
+        if source_values & real_world_values and reference_fields:
+            has_reference = any(not is_missing_value(resolve_path(record, field)) for field in reference_fields)
+            if not has_reference:
+                errors.append(
+                    "real-world record is missing traceable provenance reference fields: "
+                    + ", ".join(reference_fields)
+                )
 
     return sorted(set(errors))
 
@@ -195,6 +226,7 @@ def apply_review(record: dict[str, Any], review: dict[str, Any] | None) -> tuple
 
 def main() -> None:
     args = parse_args()
+    plan = load_plan(args.plan_file)
     db_path = initialize_database(args.db) if args.db else initialize_database()
     run_id = args.run_id or f"run_{uuid.uuid4().hex[:12]}"
     review_map = load_review_map(args.review_file)
@@ -229,7 +261,7 @@ def main() -> None:
         }
 
         for record in records:
-            errors = heuristic_errors(record, args)
+            errors = heuristic_errors(record, args, plan)
             result: dict[str, Any] = {
                 "id": record["id"],
                 "heuristic_errors": errors,

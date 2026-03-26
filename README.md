@@ -24,10 +24,10 @@ The skill operates in a continuous agentic loop, splitting work between reasonin
 
 - Specialized sub-skills: `12`
 - Pipeline entry scripts: `8`
-- Shared utility modules: `7`
+- Shared utility modules: `8`
 - Internal canonical schema: `1`
 - Preset export schemas: `3`
-- Automated tests: `39`
+- Automated tests: `43`
 
 ## Features
 
@@ -35,7 +35,7 @@ The skill operates in a continuous agentic loop, splitting work between reasonin
 |-----------|-------------|
 | `dataset collect` | Fetch content from web searches (5-backend fallback chain), explicit URLs, or local files/repos and emit canonical JSONL for agent-driven dataset creation |
 | `dataset generate` | Topic-driven generation, URL/reference structuring, web-research capture, or raw dataset normalization into canonical records with effective-count and coverage steering |
-| `dataset verify` | Heuristic checks, refusal detection, review-file adjudication, and audit-friendly DB-backed verification |
+| `dataset verify` | Heuristic checks, required-field/provenance enforcement, review-file adjudication, and audit-friendly DB-backed verification |
 | `dataset audit` | Deep post-generation corpus-quality assessment (split disjointness, context leakage, taxonomy coverage, reasoning variety, synthetic fingerprint detection) |
 | `dataset export` | OpenAI, HuggingFace, CSV, and flat JSONL export with automatic data-card generation |
 | `dataset-strategy` | Request classification, taxonomy planning, `task_type` selection, and schema planning |
@@ -171,6 +171,7 @@ The pipeline is intentionally structured to avoid this via **Anti-Synthetic Guar
 - **Human Imperfection Injection**: Seed records are deliberately varied with typos, ambiguous phrasing, and casual formatting to prevent the model from overfitting to formal prompt templates.
 - **Response Architecture Variety**: Responses are explicitly forced into diverse structures (e.g., Socratic pushback, code-first, disagreement) rather than repeating a fixed chain-of-thought skeleton.
 - **Generation-Time Coverage Steering**: `scripts/coverage.py` measures effective post-dedup count, bucket gaps, and mode collapse while the dataset is still being built.
+- **Plan-Driven Quality Gates**: the same coverage plan can now enforce required fields, provenance quotas, joint-bucket balance, and response-prefix repetition limits.
 - **Import-Time Duplicate Rejection**: `scripts/generate.py --dedup-threshold ...` rejects semantic repeats before they can inflate the corpus.
 - **Semantic Review Gate**: The final training set is expected to pass an LLM review step via `review.jsonl`; without that, records remain `judge_pending` rather than becoming `verified_pass`.
 - **Corpus-Level Synthetic Audits**: Running `dataset audit` evaluates the corpus for telltale synthetic fingerprints (like uniform sentence lengths or repetitive openings) and structural mode collapse.
@@ -233,10 +234,22 @@ This repo is an automated pipeline for the deterministic stages:
 1. import or seed canonical records
 2. run a batch-wise build loop with import-time dedup and coverage checks
 3. augment records
-4. verify records
+4. verify records, including plan-driven required-field and provenance gates when a coverage plan is supplied
 5. apply semantic review from a `review.jsonl` file
 6. deduplicate the passing set
 7. export artifacts and generate a data card
+
+## Coverage Plan Extensions
+
+The coverage plan is now the generic quality-control contract for any dataset type, not just a bucket counter.
+
+- `required_fields`: paths that every kept record must carry, for example `metadata.source_origin` or `metadata.response_family`
+- `group_minimums`: single-axis minimums keyed by path
+- `max_share_per_group`: single-axis mode-collapse ceiling
+- `joint_group_rules`: optional multi-axis rules with `fields`, optional `minimums`, and optional `max_share`
+- `provenance`: optional real-world grounding rules, including `minimum_real_world_share` and traceable `reference_fields`
+- `response_prefix`: optional repeated-opening cap using `prefix_length` and `max_share`
+- `require_review_file`: when `true`, `scripts/build_loop.py` refuses to run without `--review-file`
 
 Those reasoning-heavy phases are handled by the host IDE agent via [`SKILL.md`](./SKILL.md) and [`sub-skills/`](./sub-skills/), which matches the Codex / Antigravity / Claude Code skill model.
 

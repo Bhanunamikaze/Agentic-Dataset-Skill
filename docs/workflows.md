@@ -35,7 +35,7 @@ Use this when the user wants a new dataset or wants raw material turned into one
 6. collect or write canonical draft records with coverage metadata
 7. prefer `scripts/build_loop.py` to orchestrate import, verify, incremental dedup, and coverage checks
 8. if running manually, import drafts with `scripts/generate.py --dedup-threshold 0.85`
-9. if running manually, run `scripts/coverage.py` to measure effective count, bucket gaps, and mode collapse
+9. if running manually, run `scripts/coverage.py` to measure effective count, bucket gaps, joint-bucket skew, provenance, and response-prefix repetition
 10. repeat steps 6–9 until the coverage plan is satisfied
 11. augment if needed
 12. generate preference pairs using `dpo-pair-generator` if `task_type` is `dpo`
@@ -57,6 +57,7 @@ python3 scripts/build_loop.py \
 ```
 
 For label-only classification datasets such as `VULNERABLE` / `NOT_VULNERABLE`, lower `--verify-min-response-length` so short labels are not incorrectly rejected by the generic heuristic.
+If the plan sets `require_review_file: true`, `build_loop.py` requires `--review-file` so semantic judging happens during the build.
 
 Equivalent manual generation-time coverage loop:
 
@@ -76,7 +77,23 @@ Treat the run as incomplete until both conditions are true:
 - effective count meets the planned target
 - every required bucket in the coverage plan meets its minimum
 
+For higher-signal datasets, also treat the run as incomplete until:
+- required fields are present on every effective record
+- provenance rules are satisfied
+- joint-bucket mode collapse is below the configured threshold
+- repeated response openings stay below the configured prefix cap
+
 If you do not provide a `review-file`, the loop can still steer coverage and filter heuristics, but the records remain `judge_pending` rather than fully validated `verified_pass`.
+
+Generic plan fields now supported by `scripts/coverage.py` and `scripts/verify.py`:
+
+- `required_fields`
+- `group_minimums`
+- `max_share_per_group`
+- `joint_group_rules`
+- `provenance`
+- `response_prefix`
+- `require_review_file`
 
 ## Audit & Verify Flow
 

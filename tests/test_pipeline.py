@@ -756,6 +756,72 @@ class AdditionalCoverageTests(unittest.TestCase):
                 summary["details"][0]["heuristic_errors"][0],
             )
 
+    def test_verify_plan_can_require_fields_and_traceable_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            input_path = temp_dir / "records.jsonl"
+            plan_path = temp_dir / "coverage_plan.json"
+            db_path = temp_dir / "state.sqlite"
+
+            input_path.write_text(
+                json.dumps(
+                    {
+                        "id": "record_plan_gate",
+                        "instruction": "Classify this web rendering example.",
+                        "context": "User-controlled input is rendered in a template response.",
+                        "response": {"format": "single", "text": "VERDICT: vulnerable because the sink is unsafe."},
+                        "metadata": {
+                            "difficulty": "hard",
+                            "persona": "reviewer",
+                            "label": "vulnerable",
+                            "source_origin": "real_world",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            plan_path.write_text(
+                json.dumps(
+                    {
+                        "required_fields": [
+                            "metadata.source_origin",
+                            "metadata.response_family",
+                            "metadata.label",
+                        ],
+                        "provenance": {
+                            "field": "metadata.source_origin",
+                            "real_world_values": ["real_world"],
+                            "reference_fields": ["metadata.reference_urls", "source_uri"],
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_script(
+                "scripts/verify.py",
+                "--input", str(input_path),
+                "--plan-file", str(plan_path),
+                "--db", str(db_path),
+            )
+            summary = json.loads(result.stdout)
+
+            self.assertEqual(summary["verified_fail"], 1)
+            self.assertTrue(
+                any(
+                    error == "required field missing: metadata.response_family"
+                    for error in summary["details"][0]["heuristic_errors"]
+                )
+            )
+            self.assertTrue(
+                any(
+                    "real-world record is missing traceable provenance reference fields" in error
+                    for error in summary["details"][0]["heuristic_errors"]
+                )
+            )
+
     def test_coverage_reports_effective_count_and_plan_gaps(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir_name:
             temp_dir = Path(temp_dir_name)
@@ -834,6 +900,102 @@ class AdditionalCoverageTests(unittest.TestCase):
             )
             self.assertTrue(
                 any("2 more unique records" in item for item in summary["recommended_next_focus"])
+            )
+
+    def test_coverage_reports_joint_skew_prefix_repetition_and_provenance_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            input_path = temp_dir / "coverage.jsonl"
+            plan_path = temp_dir / "coverage_plan.json"
+
+            records = [
+                {
+                    "id": "quality_a",
+                    "instruction": "Review this rendering path.",
+                    "context": "A request parameter is inserted into a page fragment.",
+                    "response": {"format": "single", "text": "VERDICT: vulnerable because the sink executes user content."},
+                    "metadata": {
+                        "difficulty": "hard",
+                        "label": "vulnerable",
+                        "response_family": "verdict_first",
+                        "source_origin": "synthetic",
+                    },
+                },
+                {
+                    "id": "quality_b",
+                    "instruction": "Review this templating path.",
+                    "context": "A comment field is rendered back into the UI.",
+                    "response": {"format": "single", "text": "VERDICT: vulnerable because the sink reflects user content."},
+                    "metadata": {
+                        "difficulty": "hard",
+                        "label": "vulnerable",
+                        "response_family": "verdict_first",
+                        "source_origin": "synthetic",
+                    },
+                },
+                {
+                    "id": "quality_c",
+                    "instruction": "Review this escaping path.",
+                    "context": "The renderer encodes angle brackets before output.",
+                    "response": {"format": "single", "text": "TRIAGE: likely safe because the output is encoded first."},
+                    "metadata": {
+                        "difficulty": "medium",
+                        "label": "not_vulnerable",
+                        "response_family": "triage_first",
+                        "source_origin": "synthetic",
+                    },
+                },
+            ]
+            plan = {
+                "target_effective_count": 3,
+                "required_fields": [
+                    "metadata.source_origin",
+                    "metadata.response_family",
+                ],
+                "provenance": {
+                    "field": "metadata.source_origin",
+                    "real_world_values": ["real_world"],
+                    "minimum_real_world_share": 0.5,
+                    "reference_fields": ["metadata.reference_urls", "source_uri"],
+                },
+                "response_prefix": {
+                    "prefix_length": 18,
+                    "max_share": 0.5,
+                    "sample_limit": 5,
+                },
+                "joint_group_rules": [
+                    {
+                        "name": "difficulty_label",
+                        "fields": ["metadata.difficulty", "metadata.label"],
+                        "max_share": 0.5,
+                    }
+                ],
+            }
+
+            input_path.write_text(
+                "".join(json.dumps(item, ensure_ascii=True) + "\n" for item in records),
+                encoding="utf-8",
+            )
+            plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+
+            result = run_script(
+                "scripts/coverage.py",
+                "--input", str(input_path),
+                "--plan-file", str(plan_path),
+            )
+            summary = json.loads(result.stdout)
+
+            self.assertEqual(summary["effective_count"], 3)
+            self.assertEqual(summary["provenance"]["real_world_count"], 0)
+            self.assertTrue(summary["provenance_findings"])
+            self.assertTrue(summary["response_prefix_findings"])
+            self.assertTrue(summary["joint_mode_collapse"])
+            self.assertEqual(summary["joint_mode_collapse"][0]["name"], "difficulty_label")
+            self.assertTrue(
+                any("real-world grounded records" in item for item in summary["recommended_next_focus"])
+            )
+            self.assertTrue(
+                any("response openings" in item for item in summary["recommended_next_focus"])
             )
 
     def test_build_loop_runs_batches_to_completion_and_exports(self) -> None:
@@ -1013,6 +1175,145 @@ class AdditionalCoverageTests(unittest.TestCase):
             self.assertEqual(summary["stop_reason"], "coverage_plan_satisfied")
             self.assertEqual(len(summary["batches_processed"]), 1)
             self.assertEqual(summary["batches_processed"][0]["path"], str(batch_one.resolve()))
+
+    def test_build_loop_plan_can_require_review_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            batch_one = temp_dir / "batch_01.jsonl"
+            plan_path = temp_dir / "coverage_plan.json"
+
+            batch_one.write_text(
+                json.dumps(
+                    {
+                        "id": "review_gate_a",
+                        "instruction": "Explain safe output encoding.",
+                        "context": "The renderer escapes user content before insertion.",
+                        "response": {"format": "single", "text": "Use output encoding before rendering."},
+                        "metadata": {"difficulty": "medium", "persona": "reviewer"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            plan_path.write_text(
+                json.dumps(
+                    {
+                        "target_effective_count": 1,
+                        "require_review_file": True,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/build_loop.py",
+                    "--batch", str(batch_one),
+                    "--plan-file", str(plan_path),
+                ],
+                cwd=str(ROOT_DIR),
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("requires --review-file", result.stderr + result.stdout)
+
+    def test_build_loop_completion_is_blocked_by_prefix_and_provenance_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            batch_one = temp_dir / "batch_01.jsonl"
+            batch_two = temp_dir / "batch_02.jsonl"
+            plan_path = temp_dir / "coverage_plan.json"
+            review_path = temp_dir / "review.jsonl"
+
+            batch_one.write_text(
+                json.dumps(
+                    {
+                        "id": "quality_loop_a",
+                        "instruction": "Review this rendering path.",
+                        "context": "A request parameter is inserted into a page fragment.",
+                        "response": {"format": "single", "text": "VERDICT: vulnerable because the sink executes user content."},
+                        "metadata": {
+                            "difficulty": "hard",
+                            "persona": "reviewer",
+                            "label": "vulnerable",
+                            "response_family": "verdict_first",
+                            "source_origin": "synthetic",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            batch_two.write_text(
+                json.dumps(
+                    {
+                        "id": "quality_loop_b",
+                        "instruction": "Review this templating path.",
+                        "context": "A comment field is rendered back into the UI.",
+                        "response": {"format": "single", "text": "VERDICT: vulnerable because the sink reflects user content."},
+                        "metadata": {
+                            "difficulty": "hard",
+                            "persona": "reviewer",
+                            "label": "vulnerable",
+                            "response_family": "verdict_first",
+                            "source_origin": "synthetic",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            plan_path.write_text(
+                json.dumps(
+                    {
+                        "target_effective_count": 2,
+                        "required_fields": [
+                            "metadata.source_origin",
+                            "metadata.response_family",
+                        ],
+                        "provenance": {
+                            "field": "metadata.source_origin",
+                            "real_world_values": ["real_world"],
+                            "minimum_real_world_share": 0.5,
+                            "reference_fields": ["metadata.reference_urls", "source_uri"],
+                        },
+                        "response_prefix": {
+                            "prefix_length": 18,
+                            "max_share": 0.5,
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            review_path.write_text(
+                "".join(
+                    json.dumps(item, ensure_ascii=True) + "\n"
+                    for item in [
+                        {"id": "quality_loop_a", "score": 5, "reason": "Good.", "status": "pass"},
+                        {"id": "quality_loop_b", "score": 5, "reason": "Good.", "status": "pass"},
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_script(
+                "scripts/build_loop.py",
+                "--batch", str(batch_one),
+                "--batch", str(batch_two),
+                "--plan-file", str(plan_path),
+                "--review-file", str(review_path),
+            )
+            summary = json.loads(result.stdout)
+
+            self.assertFalse(summary["complete"])
+            self.assertEqual(summary["stop_reason"], "all_batches_processed")
+            self.assertTrue(summary["final_coverage"]["provenance_findings"])
+            self.assertTrue(summary["final_coverage"]["response_prefix_findings"])
 
     # ------------------------------------------------------------------
     # Empty-DB edge cases — verify, dedup, export should not crash

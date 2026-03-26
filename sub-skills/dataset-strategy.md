@@ -33,6 +33,10 @@ Turn the user request into a concrete dataset plan before any records are writte
    - choose the metadata fields that will be used to track coverage, such as `metadata.subtopic`, `metadata.intent`, `metadata.context_type`, `metadata.response_shape`, `metadata.instruction_fidelity`, or `metadata.label`
    - set minimum counts for important buckets, especially minority classes and rare edge-case contexts
    - set a max-share threshold for mode collapse (default: 40% for any single bucket)
+   - define `required_fields` for metadata or provenance that must never be missing on kept records
+   - define `joint_group_rules` when single-axis balance is insufficient, for example `difficulty x label` or `persona x response_shape`
+   - define provenance requirements such as minimum `real_world` share and traceable reference fields
+   - define `response_prefix` limits when repeated openings or templated answer scaffolds are a risk
 7. Decide ingestion safety mode:
    - red-team, security, pentest, jailbreak, and prompt-injection corpora should default to injection-tolerant import behavior
    - use strict flagging only when the user clearly wants defensive filtering instead
@@ -71,6 +75,7 @@ Produce a concise plan with:
 - effective-count target and batch size
 - taxonomy buckets
 - coverage fields, per-bucket minimums, and max-share threshold
+- required fields, joint-bucket rules, provenance rules, and response-prefix limits when needed
 - quality requirements
 - ingestion safety mode
 - sourcing strategy and real-world grounding ratio

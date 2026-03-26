@@ -59,6 +59,8 @@ Do not let every response follow the same skeleton. Force fundamentally differen
 
 Tag records with `metadata.response_shape` using values: `"concise"`, `"walkthrough"`, `"socratic"`, `"code_first"`, `"uncertain"`, `"cot"`.
 
+When the outer contract must stay structurally fixed, vary the internal answer family anyway. Tag `metadata.response_family` with values such as `"verdict_first"`, `"evidence_first"`, `"fix_first"`, `"triage_first"`, or `"uncertain"` so coverage can detect template collapse even when the top-level JSON shape stays the same.
+
 **Coverage metadata (mandatory for large or specialized datasets):**
 
 To make generation steerable, annotate each record with the fields the coverage plan will track. At minimum, populate:
@@ -68,6 +70,7 @@ To make generation steerable, annotate each record with the fields the coverage 
 - `metadata.response_shape`
 - `metadata.instruction_fidelity`
 - `metadata.source_origin`
+- `metadata.response_family` when the response contract is structurally fixed or highly repetitive
 
 For specialized classification corpora, also populate:
 
@@ -75,6 +78,7 @@ For specialized classification corpora, also populate:
 - `metadata.label`
 
 Do not leave these to inference later. If the metadata is missing, the coverage script cannot tell what to generate next.
+If a record is marked `metadata.source_origin: "real_world"`, include traceable provenance such as `metadata.reference_urls`, `metadata.source_path`, or `source_uri`.
 
 **Anti-trope guardrails:** Before finalising any response, scan for and remove:
   - Opening preambles: "As an AI…", "Certainly!", "Of course!", "Here is…", "Sure, here's…", "In summary"
@@ -120,6 +124,7 @@ Each canonical record should carry enough metadata for later export and audit:
 - `subtopic`
 - `intent`
 - `response_shape`
+- `response_family`
 - `instruction_fidelity`
 - `source_origin`
 - optional provenance such as `reference_urls`, tags, source path, or notes

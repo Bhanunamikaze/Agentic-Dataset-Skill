@@ -12,6 +12,7 @@ from typing import Any
 if __name__ == "__main__" or not getattr(sys.modules.get(__name__, None), "__package__", None):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from scripts.utils.coverage_plan import load_plan
 from scripts.utils.files import write_json
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -227,6 +228,8 @@ def build_verify_args(args: argparse.Namespace, db_path: Path, source_run_id: st
     ]
     if args.review_file:
         command.extend(["--review-file", args.review_file])
+    if args.plan_file:
+        command.extend(["--plan-file", args.plan_file])
     if args.verify_min_instruction_length is not None:
         command.extend(["--min-instruction-length", str(args.verify_min_instruction_length)])
     if args.verify_min_response_length is not None:
@@ -302,11 +305,18 @@ def coverage_complete(coverage: dict[str, Any], *, plan_file: str | None) -> boo
         and not coverage.get("coverage_gaps")
         and not coverage.get("mode_collapse")
         and not coverage.get("missing_metadata")
+        and not coverage.get("joint_coverage_gaps")
+        and not coverage.get("joint_mode_collapse")
+        and not coverage.get("provenance_findings")
+        and not coverage.get("response_prefix_findings")
     )
 
 
 def main() -> None:
     args = parse_args()
+    plan = load_plan(args.plan_file)
+    if plan.get("require_review_file") and not args.review_file:
+        raise SystemExit("This coverage plan requires --review-file so semantic judging runs during the build loop.")
     session_id = f"build_{uuid.uuid4().hex[:12]}"
     batch_paths = resolve_batches(args)
     db_path = Path(args.db).expanduser().resolve() if args.db else default_db_path(session_id)
@@ -326,6 +336,7 @@ def main() -> None:
         "review_file": args.review_file,
         "dedup_threshold": args.dedup_threshold,
         "plan_file": args.plan_file,
+        "require_review_file": bool(plan.get("require_review_file")),
         "complete": False,
         "stop_reason": None,
         "final_coverage": None,
