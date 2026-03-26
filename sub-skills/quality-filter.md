@@ -9,6 +9,7 @@ Use this before or during `verify.py`.
 - empty or trivial answers
 - broken schema structure
 - records that clearly ignore the user task
+- metadata-only variants that still have `rewrite_required: true`
 - response length violations (see task-relative minimums below)
 - verbosity mismatches (disproportionately long or short for the task type)
 
@@ -47,4 +48,3 @@ If the record fails deterministic checks, mark it as failed before asking for a 
 ```bash
 python3 scripts/verify.py --from-status raw_generated --from-status augmented
 ```
-

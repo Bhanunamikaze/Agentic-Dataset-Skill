@@ -2,7 +2,7 @@
 
 An agentic dataset-generation skill for agent IDEs, built around tool-native reasoning plus a deterministic local pipeline for normalization, verification, deduplication, export, and data-card generation.
 
-**In Simple Terms:** This tool turns your AI coding assistant into an automated data engineer. You just describe the dataset you need in normal language, and the agent automatically researches, writes examples, filters out bad/duplicate responses, and exports a high-quality dataset ready for model training (SFT or DPO).
+**In Simple Terms:** This tool turns your AI coding assistant into an automated data engineer. You describe the dataset you need, and the agent researches examples, builds them in batches, rejects duplicates early, checks coverage while generating, applies semantic review, and exports a training-ready dataset (SFT or DPO).
 
 ## IDE Compatibility
 
@@ -15,26 +15,26 @@ An agentic dataset-generation skill for agent IDEs, built around tool-native rea
 The skill operates in a continuous agentic loop, splitting work between reasoning (LLM) and deterministic processing (local SQLite/scripts):
 
 1. **Strategic Planning**: The agent analyzes your prompt, defines the output schema, sets an SFT or DPO target, and designs a multi-axis taxonomy aimed at long-tail edge cases.
-2. **Research & Seeding**: Adhering to a research-first mandate, the agent fetches real-world examples (via IDE search or web tools) and drafts initial "seed" records in a standard (`canonical`) schema, injecting human-like imperfections.
-3. **Augmentation**: The `diversity-engine` multiplies the seeds across different personas, difficulties, and structural reasoning pathways, avoiding simple slot-filling templates.
-4. **Verification & Audit**: The agent filters out refusals, runs records through an adversarial LLM judge, and executes a corpus-wide security audit (checking for context leakage, split disjointness, and synthetic fingerprints).
-5. **Deduplication & Export**: Deterministic algorithms (`scripts/dedup.py`, `scripts/export.py`) perform strict MinHash/TF-IDF deduplication. Finally, the pipeline executes a **cluster-based train/test split** (preventing scenario leakage between holdout sets) and maps the canonical records into your requested output format (OpenAI, HuggingFace Chat, flat CSV/JSONL, or a custom schema).
+2. **Research & Seeding**: Adhering to a research-first mandate, the agent fetches real-world examples (via IDE search or web tools) and drafts canonical records with explicit coverage metadata.
+3. **Batch Build Loop**: `scripts/build_loop.py` can import draft batches, reject near-duplicates on import, run verification, and measure coverage after every batch so generation targets the missing buckets instead of overproducing the dominant case.
+4. **Semantic Review**: The host IDE agent applies the `llm-judge` rubric through a `review.jsonl` file. Deterministic scripts gate structure and heuristics first, but semantic pass/fail still comes from the LLM review step.
+5. **Final Audit & Export**: The pipeline performs final deduplication, split-safe export, and corpus-level audit checks such as leakage, taxonomy coverage, balance, and synthetic fingerprints.
 
 ## Current Inventory
 
 - Specialized sub-skills: `12`
-- Pipeline entry scripts: `6`
-- Shared utility modules: `6`
+- Pipeline entry scripts: `8`
+- Shared utility modules: `7`
 - Internal canonical schema: `1`
 - Preset export schemas: `3`
-- Automated tests: `24`
+- Automated tests: `39`
 
 ## Features
 
 | Capability | Description |
 |-----------|-------------|
 | `dataset collect` | Fetch content from web searches (5-backend fallback chain), explicit URLs, or local files/repos and emit canonical JSONL for agent-driven dataset creation |
-| `dataset generate` | Topic-driven generation, URL/reference structuring, web-research capture, or raw dataset normalization into canonical records |
+| `dataset generate` | Topic-driven generation, URL/reference structuring, web-research capture, or raw dataset normalization into canonical records with effective-count and coverage steering |
 | `dataset verify` | Heuristic checks, refusal detection, review-file adjudication, and audit-friendly DB-backed verification |
 | `dataset audit` | Deep post-generation corpus-quality assessment (split disjointness, context leakage, taxonomy coverage, reasoning variety, synthetic fingerprint detection) |
 | `dataset export` | OpenAI, HuggingFace, CSV, and flat JSONL export with automatic data-card generation |
@@ -52,68 +52,39 @@ The skill operates in a continuous agentic loop, splitting work between reasonin
 
 ## Installation (All IDEs)
 
-### Quick Online Install
+Choose one of these install modes.
 
-To download the latest release package and install it across all IDEs in auto mode (`--target all`) in one step:
+All `--online` commands below download the latest release package automatically.
 
-- workspace-first when the selected project contains `.agent`, `.claude`, or `.codex`
-- user-global fallback when a workspace home for that IDE does not exist
+### 1. Workspace Install (Recommended)
+
+Use this when you want the skill inside a specific project.
+
+This creates:
+
+- `<project>/.agent/skills/dataset-generator`
+- `<project>/.claude/skills/dataset-generator`
+- `<project>/.codex/skills/dataset-generator`
 
 **macOS / Linux (Bash):**
 ```bash
-curl -sSL https://raw.githubusercontent.com/Bhanunamikaze/Agentic-Dataset-Skill/main/install.sh | bash -s -- --online
+curl -sSL https://raw.githubusercontent.com/Bhanunamikaze/Agentic-Dataset-Skill/main/install.sh | bash -s -- --online --target all --project-dir /path/to/your/project
 ```
 
 **Windows (PowerShell):**
 ```powershell
-Invoke-Expression "& { $(Invoke-RestMethod 'https://raw.githubusercontent.com/Bhanunamikaze/Agentic-Dataset-Skill/main/install.ps1') } --online"
+Invoke-Expression "& { $(Invoke-RestMethod 'https://raw.githubusercontent.com/Bhanunamikaze/Agentic-Dataset-Skill/main/install.ps1') } --online --target all --project-dir C:\path\to\your\project"
 ```
 
-### Quick Install Script
+### 2. Global Install
 
-```bash
-# 1) Clone
-git clone https://github.com/Bhanunamikaze/Agentic-Dataset-Skill.git
-cd Agentic-Dataset-Skill
+Use this when you want one shared install for all projects on your machine.
 
-# 2) Install for your target
-# Antigravity (project-local):
-bash install.sh --target antigravity --project-dir /path/to/your/project
+This creates:
 
-# Claude:
-bash install.sh --target claude
-
-# Codex:
-bash install.sh --target codex
-
-# Global user install (all IDEs):
-bash install.sh --target global
-
-# Auto-select all IDEs:
-# uses project-local .agent/.claude/.codex when present, otherwise falls back to user-global paths
-bash install.sh --target all --project-dir /path/to/your/project
-
-# Install from another local checkout:
-bash install.sh --target codex --repo-path /path/to/Agentic-Dataset-Skill
-```
-
-
-
-### Automatic Online Install
-
-To download the latest release package and install it across all IDEs in auto mode (`--target all`) in one step:
-
-**macOS / Linux (Bash):**
-```bash
-curl -sSL https://raw.githubusercontent.com/Bhanunamikaze/Agentic-Dataset-Skill/main/install.sh | bash -s -- --online
-```
-
-**Windows (PowerShell):**
-```powershell
-Invoke-Expression "& { $(Invoke-RestMethod 'https://raw.githubusercontent.com/Bhanunamikaze/Agentic-Dataset-Skill/main/install.ps1') } --online"
-```
-
-Use `--target global` when you want to force user-global installs for every IDE:
+- `~/.gemini/antigravity/skills/dataset-generator`
+- `~/.claude/skills/dataset-generator`
+- `~/.codex/skills/dataset-generator`
 
 **macOS / Linux (Bash):**
 ```bash
@@ -125,16 +96,45 @@ curl -sSL https://raw.githubusercontent.com/Bhanunamikaze/Agentic-Dataset-Skill/
 Invoke-Expression "& { $(Invoke-RestMethod 'https://raw.githubusercontent.com/Bhanunamikaze/Agentic-Dataset-Skill/main/install.ps1') } --online --target global"
 ```
 
-For a **workspace-first** installation, pass `--target all` with `--project-dir`. An explicit `--project-dir` makes all three IDE installs local to that project: Antigravity installs into `<project>/.agent`, Claude into `<project>/.claude`, and Codex into `<project>/.codex`.
+### 3. Install From a Local Checkout
 
-**macOS / Linux:**
+Use this when you want to inspect or edit the repo before installing.
+
+**macOS / Linux (Bash):**
 ```bash
-curl -sSL https://raw.githubusercontent.com/Bhanunamikaze/Agentic-Dataset-Skill/main/install.sh | bash -s -- --online --target all --project-dir /path/to/your/project
+git clone https://github.com/Bhanunamikaze/Agentic-Dataset-Skill.git
+cd Agentic-Dataset-Skill
+
+# Workspace install
+bash install.sh --target all --project-dir /path/to/your/project
+
+# Global install
+bash install.sh --target global
 ```
 
-**Windows:**
+**Windows (PowerShell):**
 ```powershell
-Invoke-Expression "& { $(Invoke-RestMethod 'https://raw.githubusercontent.com/Bhanunamikaze/Agentic-Dataset-Skill/main/install.ps1') } --online --target all --project-dir C:\path\to\your\project"
+git clone https://github.com/Bhanunamikaze/Agentic-Dataset-Skill.git
+cd Agentic-Dataset-Skill
+
+# Workspace install
+pwsh ./install.ps1 --target all --project-dir C:\path\to\your\project
+
+# Global install
+pwsh ./install.ps1 --target global
+```
+
+### Install Only One IDE
+
+Use `--target antigravity`, `--target claude`, or `--target codex`.
+
+- With `--project-dir`, the install goes into that project's local `.agent`, `.claude`, or `.codex` folder.
+- Without `--project-dir`, `antigravity` installs into the current directory and Claude/Codex install to the user-global home.
+
+Example:
+
+```bash
+bash install.sh --target codex --project-dir /path/to/your/project
 ```
 
 ## Python dependency install:
@@ -170,6 +170,9 @@ The pipeline is intentionally structured to avoid this via **Anti-Synthetic Guar
 - **Research-First Sourcing**: The agent is mandated to prefer real-world source material (forum posts, issue trackers) over pure imagination, aiming for a >60% real-world grounding ratio.
 - **Human Imperfection Injection**: Seed records are deliberately varied with typos, ambiguous phrasing, and casual formatting to prevent the model from overfitting to formal prompt templates.
 - **Response Architecture Variety**: Responses are explicitly forced into diverse structures (e.g., Socratic pushback, code-first, disagreement) rather than repeating a fixed chain-of-thought skeleton.
+- **Generation-Time Coverage Steering**: `scripts/coverage.py` measures effective post-dedup count, bucket gaps, and mode collapse while the dataset is still being built.
+- **Import-Time Duplicate Rejection**: `scripts/generate.py --dedup-threshold ...` rejects semantic repeats before they can inflate the corpus.
+- **Semantic Review Gate**: The final training set is expected to pass an LLM review step via `review.jsonl`; without that, records remain `judge_pending` rather than becoming `verified_pass`.
 - **Corpus-Level Synthetic Audits**: Running `dataset audit` evaluates the corpus for telltale synthetic fingerprints (like uniform sentence lengths or repetitive openings) and structural mode collapse.
 
 ## Example Prompts
@@ -184,10 +187,10 @@ You do not need to use explicit flags or command syntax. Natural-language prompt
 
 | You type... | Scope | Route | Main phases used |
 |-------------|-------|-------|------------------|
-| `Generate a medical triage dataset` | topic-driven generation | default-size generation | strategy -> seed -> verify -> dedup -> export |
-| `Generate a 2000-example customer support dataset in OpenAI JSONL` | topic-driven generation | user-sized generation | strategy -> seed -> verify -> dedup -> export |
-| `Turn these URLs into a training dataset` | URL/reference structuring | source-to-dataset conversion | strategy -> seed -> verify -> dedup -> export |
-| `Use web research to build a fintech FAQ dataset` | internet-research generation | research-driven generation | strategy -> seed -> verify -> dedup -> export |
+| `Generate a medical triage dataset` | topic-driven generation | default-size generation | strategy -> seed -> build_loop -> export |
+| `Generate a 2000-example customer support dataset in OpenAI JSONL` | topic-driven generation | user-sized generation | strategy -> seed -> build_loop -> export |
+| `Turn these URLs into a training dataset` | URL/reference structuring | source-to-dataset conversion | strategy -> seed -> build_loop -> export |
+| `Use web research to build a fintech FAQ dataset` | internet-research generation | research-driven generation | strategy -> seed -> build_loop -> export |
 | `Normalize this CSV into OpenAI JSONL` | existing-dataset normalization | import and reshape | strategy -> seed -> verify -> export |
 | `Verify and score this dataset.jsonl` | verify-only audit | audit flow | data-verifier -> verify -> dedup -> export |
 | `Export the verified set with custom headers` | export-only | export shaping | formatter-exporter -> export |
@@ -228,14 +231,16 @@ Verify this dataset, remove weak examples, and export custom columns: prompt, an
 This repo is an automated pipeline for the deterministic stages:
 
 1. import or seed canonical records
-2. augment records
-3. verify records
-4. deduplicate verified records
-5. export artifacts and generate a data card
+2. run a batch-wise build loop with import-time dedup and coverage checks
+3. augment records
+4. verify records
+5. apply semantic review from a `review.jsonl` file
+6. deduplicate the passing set
+7. export artifacts and generate a data card
 
 Those reasoning-heavy phases are handled by the host IDE agent via [`SKILL.md`](./SKILL.md) and [`sub-skills/`](./sub-skills/), which matches the Codex / Antigravity / Claude Code skill model.
 
-`scripts/generate.py` is intentionally an importer/seeder plus SQLite state manager. It does not call external LLM-provider APIs.
+`scripts/generate.py`, `scripts/coverage.py`, and `scripts/build_loop.py` are deterministic orchestration helpers. They do not call external LLM-provider APIs. Semantic judging still comes from the host agent via the review-file contract.
 
 ## Architecture
 

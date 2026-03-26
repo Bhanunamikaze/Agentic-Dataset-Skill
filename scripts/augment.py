@@ -141,9 +141,10 @@ def build_variants(args: argparse.Namespace, connection) -> list[dict[str, Any]]
                         "difficulty": difficulty,
                         "augmentation_mode": "metadata_variant",
                         "parent_id": base_record["id"],
+                        "rewrite_required": True,
                     },
                     "status": "augmented",
-                    "pipeline_status": "pending",
+                    "pipeline_status": "rewrite",
                     "source_type": args.source_type,
                 }
                 variant["id"] = build_record_id(

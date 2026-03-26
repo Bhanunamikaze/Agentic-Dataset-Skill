@@ -54,6 +54,8 @@ Responsibilities:
 ## 3. Deterministic Script Layer
 
 - [`scripts/generate.py`](../scripts/generate.py)
+- [`scripts/build_loop.py`](../scripts/build_loop.py)
+- [`scripts/coverage.py`](../scripts/coverage.py)
 - [`scripts/augment.py`](../scripts/augment.py)
 - [`scripts/verify.py`](../scripts/verify.py)
 - [`scripts/dedup.py`](../scripts/dedup.py)
@@ -63,6 +65,8 @@ Responsibilities:
 Responsibilities:
 
 - normalize/import canonical records
+- orchestrate batch-wise quality loops across generate -> verify -> dedup -> coverage -> export
+- measure effective post-dedup count, bucket gaps, and metadata completeness during generation
 - manage resumable SQLite state
 - apply deterministic heuristics
 - apply duplicate suppression

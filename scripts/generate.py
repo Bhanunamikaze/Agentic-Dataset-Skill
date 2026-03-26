@@ -11,9 +11,10 @@ from typing import Any
 if __name__ == "__main__" or not getattr(sys.modules.get(__name__, None), "__package__", None):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.utils.canonical import build_seed_record, normalize_record
+from scripts.utils.canonical import build_seed_record, normalize_record, record_text, row_to_record
 from scripts.utils.security import resolve_allow_injections
 from scripts.utils.db import (
+    fetch_records_by_status,
     get_connection,
     initialize_database,
     upsert_record,
@@ -21,6 +22,11 @@ from scripts.utils.db import (
 )
 from scripts.utils.files import load_records, write_json
 from scripts.utils.schema import validate_record
+from scripts.utils.similarity import (
+    add_to_similarity_index,
+    build_similarity_index,
+    find_duplicate_for_text,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,6 +85,18 @@ def parse_args() -> argparse.Namespace:
         "--report",
         help="Optional path to write a JSON summary report.",
     )
+    parser.add_argument(
+        "--dedup-threshold",
+        type=float,
+        default=None,
+        help="Reject exact and semantic near-duplicates during import using this similarity threshold.",
+    )
+    parser.add_argument(
+        "--compare-status",
+        action="append",
+        default=[],
+        help="Statuses to compare against when --dedup-threshold is enabled. Repeatable.",
+    )
     return parser.parse_args()
 
 
@@ -127,6 +145,16 @@ def load_or_seed_records(args: argparse.Namespace, allow_injections: bool) -> li
     raise SystemExit("Provide --input or use --topic with a positive --count to create seed rows.")
 
 
+def build_import_similarity_index(args: argparse.Namespace, connection):
+    if args.dedup_threshold is None:
+        return None
+
+    statuses = tuple(args.compare_status or ["raw_generated", "augmented", "judge_pending", "verified_pass"])
+    rows = fetch_records_by_status(connection, statuses)
+    records = [row_to_record(dict(row)) for row in rows]
+    return build_similarity_index(records, text_fn=record_text)
+
+
 def main() -> None:
     args = parse_args()
     db_path = initialize_database(args.db) if args.db else initialize_database()
@@ -146,8 +174,10 @@ def main() -> None:
         "source_type": args.source_type,
         "allow_injections": allow_injections,
         "imported": 0,
+        "deduped_on_import": 0,
         "failed": 0,
         "record_ids": [],
+        "duplicates": [],
         "errors": [],
     }
 
@@ -162,6 +192,7 @@ def main() -> None:
             tool_context=args.tool_context,
             status="in_progress",
         )
+        similarity_index = build_import_similarity_index(args, connection)
 
         for record in records:
             record["run_id"] = run_id
@@ -178,9 +209,40 @@ def main() -> None:
                 summary["errors"].append({"id": record.get("id"), "errors": errors})
                 continue
 
+            if similarity_index is not None and record["status"] != "seeded":
+                match = find_duplicate_for_text(
+                    similarity_index,
+                    record_id=str(record["id"]),
+                    text=record_text(record),
+                    threshold=args.dedup_threshold,
+                )
+                if match:
+                    record["status"] = "deduped"
+                    record["pipeline_status"] = "fail"
+                    record["error_message"] = (
+                        f"Rejected on import as duplicate of {match['kept_id']} ({match['reason']})"
+                    )
+                    upsert_record(connection, record)
+                    summary["deduped_on_import"] += 1
+                    summary["duplicates"].append(
+                        {
+                            "id": record["id"],
+                            "kept_id": str(match["kept_id"]),
+                            "reason": str(match["reason"]),
+                            "score": round(float(match["score"]), 4),
+                        }
+                    )
+                    continue
+
             upsert_record(connection, record)
             summary["imported"] += 1
             summary["record_ids"].append(record["id"])
+            if similarity_index is not None and record["status"] != "seeded":
+                add_to_similarity_index(
+                    similarity_index,
+                    record_id=str(record["id"]),
+                    text=record_text(record),
+                )
 
         upsert_run(
             connection,

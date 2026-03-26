@@ -1,6 +1,7 @@
 # deduplicator
 
 Use this after verification and before export.
+For large generation runs, also use the same threshold earlier with `scripts/generate.py --dedup-threshold ...` so raw-count inflation is caught during import.
 
 ## Goal
 
@@ -32,9 +33,16 @@ When a semantic cluster contains more than one record, do not keep all of them. 
 
 The goal is one high-quality representative per semantic cluster, not one representative per phrasing variant.
 
+## Prevention during generation
+
+Do not wait until the end of the run to discover that 70% of the corpus collapses.
+
+1. Import each generation batch with `scripts/generate.py --dedup-threshold 0.85`.
+2. Run `scripts/coverage.py` on the active corpus.
+3. Draft the next batch only for missing buckets or effective-count gaps.
+
 ## Command
 
 ```bash
 python3 scripts/dedup.py --from-status verified_pass --threshold 0.85
 ```
-

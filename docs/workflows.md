@@ -28,17 +28,55 @@ Use this when the user wants source material fetched before drafting training re
 Use this when the user wants a new dataset or wants raw material turned into one.
 
 1. decide request type, `task_type` (`sft` vs `dpo`), `source_type`, and target schema
-2. set the target example count
+2. set the target **effective** example count and coverage minima
 3. if the user does not specify a size, default to `500`
-4. generate or collect records in batches until the target count is reached
+4. generate or collect records in batches instead of one monolithic pass
 5. inspect recent runs in SQLite
-6. collect or write canonical draft records
-7. import drafts with `scripts/generate.py`
-8. augment if needed
-9. generate preference pairs using `dpo-pair-generator` if `task_type` is `dpo`
-10. verify
-11. deduplicate
-12. export
+6. collect or write canonical draft records with coverage metadata
+7. prefer `scripts/build_loop.py` to orchestrate import, verify, incremental dedup, and coverage checks
+8. if running manually, import drafts with `scripts/generate.py --dedup-threshold 0.85`
+9. if running manually, run `scripts/coverage.py` to measure effective count, bucket gaps, and mode collapse
+10. repeat steps 6–9 until the coverage plan is satisfied
+11. augment if needed
+12. generate preference pairs using `dpo-pair-generator` if `task_type` is `dpo`
+13. verify
+14. deduplicate
+15. export
+
+Recommended automated loop:
+
+```bash
+python3 scripts/build_loop.py \
+    --batch workspace/drafts_batch_01.jsonl \
+    --batch workspace/drafts_batch_02.jsonl \
+    --plan-file workspace/coverage_plan.json \
+    --source-type generated \
+    --tool-context codex \
+    --review-file workspace/review.jsonl \
+    --verify-min-response-length 5
+```
+
+For label-only classification datasets such as `VULNERABLE` / `NOT_VULNERABLE`, lower `--verify-min-response-length` so short labels are not incorrectly rejected by the generic heuristic.
+
+Equivalent manual generation-time coverage loop:
+
+```bash
+python3 scripts/generate.py --input workspace/drafts_batch_01.jsonl \
+    --source-type generated --tool-context codex --dedup-threshold 0.85
+
+python3 scripts/coverage.py \
+    --from-status raw_generated \
+    --from-status augmented \
+    --from-status verified_pass \
+    --threshold 0.85 \
+    --plan-file workspace/coverage_plan.json
+```
+
+Treat the run as incomplete until both conditions are true:
+- effective count meets the planned target
+- every required bucket in the coverage plan meets its minimum
+
+If you do not provide a `review-file`, the loop can still steer coverage and filter heuristics, but the records remain `judge_pending` rather than fully validated `verified_pass`.
 
 ## Audit & Verify Flow
 

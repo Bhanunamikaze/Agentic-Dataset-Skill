@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import re
 import sys
 import uuid
 from pathlib import Path
@@ -20,8 +18,7 @@ from scripts.utils.db import (
     upsert_run,
 )
 from scripts.utils.files import write_json
-
-TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
+from scripts.utils.similarity import find_duplicates
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,68 +67,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def tokenize(text: str) -> list[str]:
-    return TOKEN_PATTERN.findall(text.lower())
-
-
-def shingle_set(text: str, *, size: int = 3) -> set[str]:
-    tokens = tokenize(text)
-    if len(tokens) < size:
-        return {" ".join(tokens)} if tokens else set()
-    return {" ".join(tokens[index : index + size]) for index in range(len(tokens) - size + 1)}
-
-
-def similarity(left: set[str], right: set[str]) -> float:
-    if not left and not right:
-        return 1.0
-    if not left or not right:
-        return 0.0
-    return len(left & right) / len(left | right)
-
-
-def find_duplicates(records: list[dict], threshold: float) -> tuple[list[str], list[dict[str, str]]]:
-    kept_ids: list[str] = []
-    duplicate_details: list[dict[str, str]] = []
-    exact_seen: dict[str, str] = {}
-    kept_shingles: dict[str, set[str]] = {}
-
-    for record in records:
-        text = record_text(record)
-        exact_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        if exact_hash in exact_seen:
-            duplicate_details.append(
-                {
-                    "duplicate_id": record["id"],
-                    "kept_id": exact_seen[exact_hash],
-                    "reason": "exact",
-                }
-            )
-            continue
-
-        shingles = shingle_set(text)
-        matched_keep: str | None = None
-        for kept_id, kept_tokens in kept_shingles.items():
-            if similarity(shingles, kept_tokens) >= threshold:
-                matched_keep = kept_id
-                break
-
-        if matched_keep:
-            duplicate_details.append(
-                {
-                    "duplicate_id": record["id"],
-                    "kept_id": matched_keep,
-                    "reason": "near",
-                }
-            )
-            continue
-
-        exact_seen[exact_hash] = record["id"]
-        kept_shingles[record["id"]] = shingles
-        kept_ids.append(record["id"])
-
-    return kept_ids, duplicate_details
-
-
 def main() -> None:
     args = parse_args()
     db_path = initialize_database(args.db) if args.db else initialize_database()
@@ -156,7 +91,11 @@ def main() -> None:
         rows = rows[: args.limit]
         records = [row_to_record(dict(row)) for row in rows]
 
-        kept_ids, duplicate_details = find_duplicates(records, args.threshold)
+        kept_ids, duplicate_details = find_duplicates(
+            records,
+            threshold=args.threshold,
+            text_fn=record_text,
+        )
         duplicate_ids = {item["duplicate_id"] for item in duplicate_details}
 
         for record in records:

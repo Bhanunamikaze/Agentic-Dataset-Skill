@@ -649,7 +649,7 @@ class AdditionalCoverageTests(unittest.TestCase):
             connection = sqlite3.connect(db_path)
             try:
                 rows = connection.execute(
-                    "SELECT metadata_json FROM records WHERE status = 'augmented'"
+                    "SELECT metadata_json, pipeline_status FROM records WHERE status = 'augmented'"
                 ).fetchall()
             finally:
                 connection.close()
@@ -657,6 +657,362 @@ class AdditionalCoverageTests(unittest.TestCase):
             personas_found = {json.loads(row[0])["persona"] for row in rows}
             self.assertIn("expert", personas_found)
             self.assertIn("skeptical-reviewer", personas_found)
+            for metadata_json, pipeline_status in rows:
+                metadata = json.loads(metadata_json)
+                self.assertTrue(metadata["rewrite_required"])
+                self.assertEqual(pipeline_status, "rewrite")
+
+    def test_generate_can_reject_duplicates_on_import(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            db_path = temp_dir / "state.sqlite"
+            input_path = temp_dir / "drafts.jsonl"
+
+            records = [
+                {
+                    "id": "dup_a",
+                    "instruction": "Classify this server-side template snippet for XSS risk.",
+                    "context": "The code inserts req.query.q into innerHTML after no sanitization.",
+                    "response": {"format": "single", "text": "VULNERABLE"},
+                    "metadata": {"difficulty": "medium", "persona": "reviewer"},
+                    "pipeline_status": "pending",
+                },
+                {
+                    "id": "dup_b",
+                    "instruction": "Classify this server-side template snippet for XSS risk.",
+                    "context": "The code inserts req.query.q into innerHTML after no sanitization.",
+                    "response": {"format": "single", "text": "VULNERABLE"},
+                    "metadata": {"difficulty": "medium", "persona": "reviewer"},
+                    "pipeline_status": "pending",
+                },
+            ]
+
+            input_path.write_text(
+                "".join(json.dumps(item, ensure_ascii=True) + "\n" for item in records),
+                encoding="utf-8",
+            )
+
+            result = run_script(
+                "scripts/generate.py",
+                "--input", str(input_path),
+                "--db", str(db_path),
+                "--dedup-threshold", "0.85",
+            )
+            summary = json.loads(result.stdout)
+
+            self.assertEqual(summary["imported"], 1)
+            self.assertEqual(summary["deduped_on_import"], 1)
+            self.assertEqual(len(summary["duplicates"]), 1)
+
+            connection = sqlite3.connect(db_path)
+            try:
+                rows = connection.execute(
+                    "SELECT id, status, pipeline_status, error_message FROM records ORDER BY id"
+                ).fetchall()
+            finally:
+                connection.close()
+
+            self.assertEqual(rows[0][1], "raw_generated")
+            self.assertEqual(rows[1][1], "deduped")
+            self.assertEqual(rows[1][2], "fail")
+            self.assertIn("Rejected on import as duplicate", rows[1][3])
+
+    def test_verify_rejects_metadata_only_variants_until_rewritten(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            input_path = temp_dir / "variant.jsonl"
+            db_path = temp_dir / "state.sqlite"
+
+            input_path.write_text(
+                json.dumps(
+                    {
+                        "id": "variant_pending",
+                        "instruction": "Review this XSS classification example.",
+                        "context": "",
+                        "response": {"format": "single", "text": "NOT_VULNERABLE"},
+                        "metadata": {
+                            "difficulty": "medium",
+                            "persona": "reviewer",
+                            "rewrite_required": True,
+                        },
+                        "status": "augmented",
+                        "pipeline_status": "rewrite",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = run_script(
+                "scripts/verify.py",
+                "--input", str(input_path),
+                "--db", str(db_path),
+            )
+            summary = json.loads(result.stdout)
+
+            self.assertEqual(summary["verified_fail"], 1)
+            self.assertIn(
+                "metadata-only variant and must be rewritten",
+                summary["details"][0]["heuristic_errors"][0],
+            )
+
+    def test_coverage_reports_effective_count_and_plan_gaps(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            input_path = temp_dir / "coverage.jsonl"
+            plan_path = temp_dir / "coverage_plan.json"
+
+            records = [
+                {
+                    "id": "cov_a",
+                    "instruction": "Classify this reflected XSS sink.",
+                    "context": "query string flows into innerHTML",
+                    "response": {"format": "single", "text": "VULNERABLE"},
+                    "metadata": {
+                        "subtopic": "reflected",
+                        "response_shape": "concise",
+                        "instruction_fidelity": "polished",
+                    },
+                },
+                {
+                    "id": "cov_b",
+                    "instruction": "Classify this reflected XSS sink.",
+                    "context": "query string flows into innerHTML",
+                    "response": {"format": "single", "text": "VULNERABLE"},
+                    "metadata": {
+                        "subtopic": "reflected",
+                        "response_shape": "concise",
+                        "instruction_fidelity": "polished",
+                    },
+                },
+                {
+                    "id": "cov_c",
+                    "instruction": "Classify this stored XSS case.",
+                    "context": "comment body is saved then rendered through innerHTML",
+                    "response": {"format": "single", "text": "VULNERABLE"},
+                    "metadata": {
+                        "subtopic": "stored",
+                        "response_shape": "walkthrough",
+                        "instruction_fidelity": "casual",
+                    },
+                },
+            ]
+            plan = {
+                "target_effective_count": 4,
+                "max_share_per_group": 0.6,
+                "group_minimums": {
+                    "metadata.subtopic": {
+                        "reflected": 1,
+                        "stored": 1,
+                        "dom": 1,
+                    }
+                },
+            }
+
+            input_path.write_text(
+                "".join(json.dumps(item, ensure_ascii=True) + "\n" for item in records),
+                encoding="utf-8",
+            )
+            plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+
+            result = run_script(
+                "scripts/coverage.py",
+                "--input", str(input_path),
+                "--plan-file", str(plan_path),
+            )
+            summary = json.loads(result.stdout)
+
+            self.assertEqual(summary["records_examined"], 3)
+            self.assertEqual(summary["effective_count"], 2)
+            self.assertEqual(summary["duplicate_count"], 1)
+            self.assertEqual(summary["target_effective_gap"], 2)
+            self.assertTrue(
+                any(
+                    item["field"] == "metadata.subtopic" and item["value"] == "dom" and item["gap"] == 1
+                    for item in summary["coverage_gaps"]
+                )
+            )
+            self.assertTrue(
+                any("2 more unique records" in item for item in summary["recommended_next_focus"])
+            )
+
+    def test_build_loop_runs_batches_to_completion_and_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            batch_one = temp_dir / "batch_01.jsonl"
+            batch_two = temp_dir / "batch_02.jsonl"
+            plan_path = temp_dir / "coverage_plan.json"
+            review_path = temp_dir / "review.jsonl"
+            output_dir = temp_dir / "exports"
+
+            batch_one.write_text(
+                json.dumps(
+                    {
+                        "id": "loop_a",
+                        "instruction": "Classify this reflected XSS example.",
+                        "context": "query string value is written into innerHTML",
+                        "response": {"format": "single", "text": "VULNERABLE"},
+                        "metadata": {
+                            "difficulty": "medium",
+                            "persona": "reviewer",
+                            "subtopic": "reflected",
+                            "response_shape": "concise",
+                            "instruction_fidelity": "casual",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            batch_two.write_text(
+                json.dumps(
+                    {
+                        "id": "loop_b",
+                        "instruction": "Classify this stored XSS example.",
+                        "context": "comment body is persisted and later rendered via innerHTML",
+                        "response": {"format": "single", "text": "VULNERABLE"},
+                        "metadata": {
+                            "difficulty": "medium",
+                            "persona": "reviewer",
+                            "subtopic": "stored",
+                            "response_shape": "walkthrough",
+                            "instruction_fidelity": "polished",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            plan_path.write_text(
+                json.dumps(
+                    {
+                        "target_effective_count": 2,
+                        "max_share_per_group": 0.8,
+                        "group_minimums": {
+                            "metadata.subtopic": {
+                                "reflected": 1,
+                                "stored": 1,
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            review_path.write_text(
+                "".join(
+                    json.dumps(item, ensure_ascii=True) + "\n"
+                    for item in [
+                        {"id": "loop_a", "score": 5, "reason": "Good.", "status": "pass"},
+                        {"id": "loop_b", "score": 5, "reason": "Good.", "status": "pass"},
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_script(
+                "scripts/build_loop.py",
+                "--batch", str(batch_one),
+                "--batch", str(batch_two),
+                "--plan-file", str(plan_path),
+                "--review-file", str(review_path),
+                "--verify-min-response-length", "5",
+                "--export-format", "jsonl",
+                "--output-dir", str(output_dir),
+                "--split", "0.0",
+            )
+            summary = json.loads(result.stdout)
+
+            self.assertTrue(summary["complete"])
+            self.assertEqual(summary["stop_reason"], "coverage_plan_satisfied")
+            self.assertEqual(len(summary["batches_processed"]), 2)
+            self.assertEqual(summary["final_coverage"]["effective_count"], 2)
+            self.assertEqual(summary["export"]["records_exported"], 2)
+            self.assertTrue((output_dir / "flat_train.jsonl").exists())
+            self.assertTrue((output_dir / "canonical_train.jsonl").exists())
+
+    def test_build_loop_stops_early_when_plan_is_already_satisfied(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            batch_one = temp_dir / "batch_01.jsonl"
+            batch_two = temp_dir / "batch_02.jsonl"
+            plan_path = temp_dir / "coverage_plan.json"
+            review_path = temp_dir / "review.jsonl"
+
+            batch_one.write_text(
+                json.dumps(
+                    {
+                        "id": "early_a",
+                        "instruction": "Classify this reflected XSS example.",
+                        "context": "query string value is written into innerHTML",
+                        "response": {"format": "single", "text": "VULNERABLE"},
+                        "metadata": {
+                            "difficulty": "medium",
+                            "persona": "reviewer",
+                            "subtopic": "reflected",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            batch_two.write_text(
+                json.dumps(
+                    {
+                        "id": "early_b",
+                        "instruction": "Classify this stored XSS example.",
+                        "context": "comment body is persisted and later rendered",
+                        "response": {"format": "single", "text": "VULNERABLE"},
+                        "metadata": {
+                            "difficulty": "medium",
+                            "persona": "reviewer",
+                            "subtopic": "stored",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            plan_path.write_text(
+                json.dumps(
+                    {
+                        "target_effective_count": 1,
+                        "max_share_per_group": 1.0,
+                        "group_minimums": {
+                            "metadata.subtopic": {
+                                "reflected": 1,
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            review_path.write_text(
+                "".join(
+                    json.dumps(item, ensure_ascii=True) + "\n"
+                    for item in [
+                        {"id": "early_a", "score": 5, "reason": "Good.", "status": "pass"},
+                        {"id": "early_b", "score": 5, "reason": "Good.", "status": "pass"},
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_script(
+                "scripts/build_loop.py",
+                "--batch", str(batch_one),
+                "--batch", str(batch_two),
+                "--plan-file", str(plan_path),
+                "--review-file", str(review_path),
+                "--verify-min-response-length", "5",
+            )
+            summary = json.loads(result.stdout)
+
+            self.assertTrue(summary["complete"])
+            self.assertEqual(summary["stop_reason"], "coverage_plan_satisfied")
+            self.assertEqual(len(summary["batches_processed"]), 1)
+            self.assertEqual(summary["batches_processed"][0]["path"], str(batch_one.resolve()))
 
     # ------------------------------------------------------------------
     # Empty-DB edge cases — verify, dedup, export should not crash

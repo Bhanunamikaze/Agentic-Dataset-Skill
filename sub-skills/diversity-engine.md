@@ -30,6 +30,7 @@ Before generating any variant, run a coverage audit:
 2. Count records per cluster. Flag any cluster with < 5% of total records as **undertopic**.
 3. Flag any cluster with > 40% of total records as **mode collapse risk**.
 4. Target augmentation at undertopics first. Do not create variants of already well-represented clusters unless undertopics are covered.
+5. Count coverage on the **effective** corpus, not the raw corpus. Use `scripts/coverage.py` so near-duplicates do not hide missing buckets.
 
 This prevents surface paraphrase of the easy/common case while rare edge cases stay at near-zero.
 
@@ -42,6 +43,7 @@ task category × difficulty × user type × edge case type
 ```
 
 Each cell should have at least one record. Cells that are empty after base generation are augmentation targets. Cells that already have 5+ records are low-priority.
+For specialized datasets, set explicit per-cell minimums in a coverage plan and keep augmenting only the missing cells.
 
 ## Two execution paths
 
@@ -62,9 +64,15 @@ python3 scripts/augment.py --input <augmented.jsonl> --tool-context <codex|claud
 python3 scripts/augment.py --from-status raw_generated --persona expert --persona reviewer --difficulty medium --difficulty hard
 ```
 
+Important:
+- Metadata-variant rows are scaffolding, not finished examples.
+- The script now marks them `rewrite_required`.
+- They will fail `verify.py` until the instruction/response has been genuinely rewritten.
+
 ## Guardrails
 
 - **Ban "Mad-Libs" slot-filling**: Do not create variants that merely swap entity names or variable names while keeping the exact same reasoning structure.
+- **Ban metadata-only completion**: Never count a metadata variant toward the requested dataset size until it has been rewritten and survives duplicate screening.
 - **Enforce Structural Diversity**: Force the LLM to vary the entire reasoning pathway, paragraph structure, and code complexity.
 - Keep semantic coverage wider than surface paraphrase.
 

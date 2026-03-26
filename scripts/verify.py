@@ -126,8 +126,11 @@ def heuristic_errors(record: dict[str, Any], args: argparse.Namespace) -> list[s
     errors = validate_record(record)
 
     instruction = str(record.get("instruction", "")).strip()
+    metadata = dict(record.get("metadata") or {})
     if len(instruction) < args.min_instruction_length:
         errors.append("instruction is too short for a stable training example")
+    if metadata.get("rewrite_required"):
+        errors.append("record is a metadata-only variant and must be rewritten before verification")
 
     for text in response_texts(record):
         stripped = text.strip()

@@ -22,7 +22,7 @@ Before drafting any synthetic record, the agent must research real-world materia
 - Spread examples across taxonomy, persona, and difficulty.
 - Keep records concrete and non-redundant.
 - Unless the user specifies otherwise, target `500` total records.
-- For large targets, generate in batches and keep going until the planned count is reached.
+- For large targets, generate in batches and keep going until the planned **effective** count is reached after duplicate suppression.
 - Do not stop after a small starter set unless the user explicitly asked for a prototype or sample.
 
 **Multi-constraint prompts (mandatory):** Every seed instruction must carry at least 2–3 explicit constraints, for example:
@@ -59,6 +59,23 @@ Do not let every response follow the same skeleton. Force fundamentally differen
 
 Tag records with `metadata.response_shape` using values: `"concise"`, `"walkthrough"`, `"socratic"`, `"code_first"`, `"uncertain"`, `"cot"`.
 
+**Coverage metadata (mandatory for large or specialized datasets):**
+
+To make generation steerable, annotate each record with the fields the coverage plan will track. At minimum, populate:
+
+- `metadata.subtopic`
+- `metadata.intent`
+- `metadata.response_shape`
+- `metadata.instruction_fidelity`
+- `metadata.source_origin`
+
+For specialized classification corpora, also populate:
+
+- `metadata.context_type`
+- `metadata.label`
+
+Do not leave these to inference later. If the metadata is missing, the coverage script cannot tell what to generate next.
+
 **Anti-trope guardrails:** Before finalising any response, scan for and remove:
   - Opening preambles: "As an AI…", "Certainly!", "Of course!", "Here is…", "Sure, here's…", "In summary"
   - Self-referential hedges: "As a language model…", "I should note that…"
@@ -89,6 +106,7 @@ python3 scripts/generate.py --input <drafts.jsonl> --source-type <generated|url_
 ```
 
 The imported drafts will enter the pipeline as `raw_generated` records unless they still contain explicit placeholder responses, in which case they remain `seeded`.
+For active generation runs, import with `--dedup-threshold 0.85` so near-duplicates are rejected before they distort the raw count.
 
 For red-team, security, pentest, jailbreak, or prompt-injection datasets, treat injection-tolerant import as the default. Add `--enforce-security-flags` only when you want those payloads flagged instead of preserved.
 
@@ -99,6 +117,11 @@ Each canonical record should carry enough metadata for later export and audit:
 - `difficulty`
 - `persona`
 - `source_type`
+- `subtopic`
+- `intent`
+- `response_shape`
+- `instruction_fidelity`
+- `source_origin`
 - optional provenance such as `reference_urls`, tags, source path, or notes
 
 For untrusted imports and web-derived material, also inspect:

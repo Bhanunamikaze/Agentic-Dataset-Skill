@@ -49,10 +49,10 @@ Use this when the user wants a new dataset or wants source material structured i
    - `task_type`
    - `source_type`
    - target export schema
-   - target example count
+   - target effective example count
    - whether this is a fresh run or a resume
 
-If the user does not specify a size, set the target example count to `500`.
+If the user does not specify a size, set the target effective example count to `500`.
 2. If existing runs may matter, inspect the SQLite state before generating:
 
 ```bash
@@ -90,16 +90,42 @@ If there is a relevant unfinished or recent run, ask whether to resume or start 
 
 4. Load draft records into SQLite:
 
+Preferred automated path when you already have planned batch files:
+
 ```bash
-python3 scripts/generate.py --input <drafts.jsonl> --source-type <generated|url_reference|raw_dataset|internet_research> --tool-context <codex|claude|antigravity>
+python3 scripts/build_loop.py --batch <drafts_batch_01.jsonl> --batch <drafts_batch_02.jsonl> --plan-file <coverage_plan.json> --source-type <generated|url_reference|raw_dataset|internet_research> --tool-context <codex|claude|antigravity> [--review-file <review.jsonl>] [--verify-min-response-length 5]
+```
+
+This orchestrates import-time dedup, optional verify/dedup, and a coverage check after every batch.
+For short-label classification corpora, lower `--verify-min-response-length` so labels like `VULNERABLE` are not rejected by the generic heuristic floor.
+
+Manual import path:
+
+```bash
+python3 scripts/generate.py --input <drafts.jsonl> --source-type <generated|url_reference|raw_dataset|internet_research> --tool-context <codex|claude|antigravity> --dedup-threshold 0.85
 ```
 
 Imported drafts are promoted into the runnable pipeline with status `raw_generated` unless they are explicit placeholder seeds.
+When `--dedup-threshold` is used, near-duplicates are marked `deduped` immediately instead of inflating the raw count.
 
 If the user is intentionally building red-team, security, pentest, prompt-injection, jailbreak, or system-prompt-leak training data, default to injection-tolerant import behavior. The scripts now auto-enable this for matching requests, and you can still pass `--allow-injections` explicitly for clarity. Use `--enforce-security-flags` only when you want strict flagging even on those corpora.
 For untrusted sources, normalization also strips hostile control characters and may add `metadata.security_flags` plus `metadata.requires_manual_review`.
 
 For generation requests, do not treat a small sample as the finished dataset unless the user explicitly asked for a small sample, prototype, or test run.
+Do not treat the raw imported count as success. The generation loop is complete only when the post-dedup effective count and per-bucket coverage targets are met.
+
+4B. If you are not using `build_loop.py`, measure effective progress after each import batch before drafting the next batch:
+
+```bash
+python3 scripts/coverage.py --from-status raw_generated --from-status augmented --from-status verified_pass --threshold 0.85 --plan-file <coverage_plan.json>
+```
+
+The coverage plan should define:
+- `target_effective_count`
+- `max_share_per_group`
+- `group_minimums` keyed by metadata paths such as `metadata.subtopic`, `metadata.context_type`, `metadata.response_shape`, or `metadata.label`
+
+If the effective count is still below target or any bucket is under its minimum, draft another batch aimed only at the missing buckets.
 
 5. If augmentation is needed, read `sub-skills/diversity-engine.md` and either import rewritten augmentations or create metadata variants:
 
@@ -112,6 +138,8 @@ Or deterministic metadata variants:
 ```bash
 python3 scripts/augment.py --from-status raw_generated --persona expert --difficulty hard
 ```
+
+Metadata-variant rows are scaffolding only. They are now marked `rewrite_required` and cannot pass `verify.py` until the instruction/response has actually been rewritten.
 
 6. Run heuristic verification:
 
@@ -132,6 +160,8 @@ python3 scripts/verify.py --from-status raw_generated --review-file <review.json
 ```bash
 python3 scripts/dedup.py --from-status verified_pass
 ```
+
+The final dedup pass still runs before export, but it is not a substitute for generation-time duplicate suppression and coverage tracking.
 
 9. Read `sub-skills/formatter-exporter.md` and export the dataset plus data card:
 
