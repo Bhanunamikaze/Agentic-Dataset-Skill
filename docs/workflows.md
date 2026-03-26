@@ -40,15 +40,21 @@ Use this when the user wants a new dataset or wants raw material turned into one
 11. deduplicate
 12. export
 
-## Verify Flow
+## Audit & Verify Flow
 
-Use this when the user already has a file and wants an audit.
+Use this when the user already has a dataset (or just generated one) and wants a structured quality assessment.
 
-1. import the file with `scripts/generate.py --source-type raw_dataset`
+1. import the file with `scripts/generate.py --source-type raw_dataset` (if not already generated)
 2. capture the generated `run_id`
-3. run `scripts/verify.py --source-run-id <run_id>`
-4. run `scripts/dedup.py --source-run-id <run_id>`
-5. export audit-ready outputs
+3. If running **Verify** (fast heuristic checks):
+   - run `scripts/verify.py --source-run-id <run_id>`
+   - run `scripts/dedup.py --source-run-id <run_id>`
+   - export audit-ready outputs
+4. If running **Audit** (`dataset audit` via `dataset-auditor.md`):
+   - agent runs verification, deduplication, and export to assemble metrics
+   - agent loads test/train splits to verify disjointness and scenario uniqueness
+   - agent samples records to detect context-leakage and synthetic fingerprints
+   - agent emits a final structured Markdown report with severity-classed findings.
 
 This preserves lineage and keeps the verify-only path resumable.
 

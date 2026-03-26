@@ -12,7 +12,7 @@ An agentic dataset-generation skill for agent IDEs, built around tool-native rea
 
 ## Current Inventory
 
-- Specialized sub-skills: `11`
+- Specialized sub-skills: `12`
 - Pipeline entry scripts: `6`
 - Shared utility modules: `6`
 - Internal canonical schema: `1`
@@ -27,6 +27,7 @@ An agentic dataset-generation skill for agent IDEs, built around tool-native rea
 | `dataset collect` | Fetch content from web searches (5-backend fallback chain), explicit URLs, or local files/repos and emit canonical JSONL for agent-driven dataset creation |
 | `dataset generate` | Topic-driven generation, URL/reference structuring, web-research capture, or raw dataset normalization into canonical records |
 | `dataset verify` | Heuristic checks, refusal detection, review-file adjudication, and audit-friendly DB-backed verification |
+| `dataset audit` | Deep post-generation corpus-quality assessment (split disjointness, context leakage, taxonomy coverage, reasoning variety, synthetic fingerprint detection) |
 | `dataset export` | OpenAI, HuggingFace, CSV, and flat JSONL export with automatic data-card generation |
 | `dataset-strategy` | Request classification, taxonomy planning, `task_type` selection, and schema planning |
 | `seed-generator` | Canonical draft creation for generated, URL-derived, research-derived, or imported datasets |
@@ -36,6 +37,7 @@ An agentic dataset-generation skill for agent IDEs, built around tool-native rea
 | `dpo-pair-generator` | Generates contrastive preference pairs with hard negatives for Direct Preference Optimization (DPO) |
 | `deduplicator` | Exact and semantic near-duplicate suppression before export |
 | `formatter-exporter` | Preset and custom flat-schema mapping for final user-facing outputs |
+| `dataset-auditor` | Evaluates full corpora for synthetic contamination, context leakage, balanced coverage, and holdout contamination |
 | `local-collector` | Sub-skill that routes collection through IDE-native tools first, then falls back to `scripts/collect.py` |
 
 
@@ -112,6 +114,17 @@ python3 scripts/verify.py --input dataset.jsonl --source-type raw_dataset --allo
 Use `--enforce-security-flags` to opt back into strict flagging for those requests.
 
 That bypasses prompt-injection regex flagging while preserving other normalization behavior.
+
+## Real-World Grounding & Anti-Synthetic Quality
+
+Standard LLM dataset generation often produces "synthetic-feeling" datasets (e.g., highly templated reasoning, perfectly polished but unnatural prompts, and context leakage). 
+
+The pipeline is intentionally structured to avoid this via **Anti-Synthetic Guardrails**:
+
+- **Research-First Sourcing**: The agent is mandated to prefer real-world source material (forum posts, issue trackers) over pure imagination, aiming for a >60% real-world grounding ratio.
+- **Human Imperfection Injection**: Seed records are deliberately varied with typos, ambiguous phrasing, and casual formatting to prevent the model from overfitting to formal prompt templates.
+- **Response Architecture Variety**: Responses are explicitly forced into diverse structures (e.g., Socratic pushback, code-first, disagreement) rather than repeating a fixed chain-of-thought skeleton.
+- **Corpus-Level Synthetic Audits**: Running `dataset audit` evaluates the corpus for telltale synthetic fingerprints (like uniform sentence lengths or repetitive openings) and structural mode collapse.
 
 ## Example Prompts
 

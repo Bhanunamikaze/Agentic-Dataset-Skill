@@ -40,6 +40,7 @@ Responsibilities:
 - [`sub-skills/formatter-exporter.md`](../sub-skills/formatter-exporter.md)
 - [`sub-skills/data-card.md`](../sub-skills/data-card.md)
 - [`sub-skills/data-verifier.md`](../sub-skills/data-verifier.md)
+- [`sub-skills/dataset-auditor.md`](../sub-skills/dataset-auditor.md)
 
 Responsibilities:
 
