@@ -1,6 +1,6 @@
-# AI Dataset Generator
+# AI Dataset Generator: Skill for Claude, Codex, and Antigravity
 
-An AI dataset generator for agent IDEs, built around tool-native reasoning plus a deterministic local pipeline for normalization, verification, deduplication, export, and data-card generation.
+An AI dataset generator skill for agent IDEs, built around tool-native reasoning plus a deterministic local pipeline for normalization, verification, deduplication, export, and data-card generation.
 
 **In Simple Terms:** This tool turns your AI coding assistant into an automated data engineer. You describe the dataset you need, and the agent researches examples, builds them in batches, rejects duplicates early, checks coverage while generating, applies semantic review, and exports a training-ready dataset (SFT or DPO).
 
