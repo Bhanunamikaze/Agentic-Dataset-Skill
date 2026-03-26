@@ -39,6 +39,7 @@ Turn the user request into a concrete dataset plan before any records are writte
    - define `response_length` limits when the task needs short or tightly bounded outputs
    - define `response_structure` limits when one JSON or text skeleton would otherwise dominate the dataset
    - define `response_prefix` limits when repeated openings or templated answer scaffolds are a risk
+   - define `model_visibility` rules when labels, mechanisms, sink names, or other answer-bearing fields must remain in metadata for audit but should be stripped from model-visible `instruction` or `context`
    - choose which advanced quality sections are advisory versus blocking; by default these should stay advisory unless the user explicitly wants them enforced as hard completion gates
 7. Decide ingestion safety mode:
    - red-team, security, pentest, jailbreak, and prompt-injection corpora should default to injection-tolerant import behavior

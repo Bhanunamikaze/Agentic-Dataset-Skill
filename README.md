@@ -24,10 +24,10 @@ The skill operates in a continuous agentic loop, splitting work between reasonin
 
 - Specialized sub-skills: `12`
 - Pipeline entry scripts: `8`
-- Shared utility modules: `8`
+- Shared utility modules: `9`
 - Internal canonical schema: `1`
 - Preset export schemas: `3`
-- Automated tests: `46`
+- Automated tests: `48`
 
 ## Features
 
@@ -172,6 +172,7 @@ The pipeline is intentionally structured to avoid this via **Anti-Synthetic Guar
 - **Response Architecture Variety**: Responses are explicitly forced into diverse structures (e.g., Socratic pushback, code-first, disagreement) rather than repeating a fixed chain-of-thought skeleton.
 - **Generation-Time Coverage Steering**: `scripts/coverage.py` measures effective post-dedup count, bucket gaps, and mode collapse while the dataset is still being built.
 - **Plan-Driven Quality Gates**: the same coverage plan can now enforce required fields, provenance quotas, joint-bucket balance, and response-prefix repetition limits.
+- **Model-Visibility Controls**: the export step can now sanitize model-visible `instruction` and `context` fields via plan-driven line removal and value redaction while preserving full metadata for audit use.
 - **Import-Time Duplicate Rejection**: `scripts/generate.py --dedup-threshold ...` rejects semantic repeats before they can inflate the corpus.
 - **Semantic Review Gate**: The final training set is expected to pass an LLM review step via `review.jsonl`; without that, records remain `judge_pending` rather than becoming `verified_pass`.
 - **Corpus-Level Synthetic Audits**: Running `dataset audit` evaluates the corpus for telltale synthetic fingerprints (like uniform sentence lengths or repetitive openings) and structural mode collapse.
@@ -251,13 +252,14 @@ The coverage plan is now the generic quality-control contract for any dataset ty
 - `response_length`: optional caps for median response size and the share of records above a maximum length
 - `response_structure`: optional cap on one dominant response signature, useful when responses are JSON-shaped
 - `response_prefix`: optional repeated-opening cap using `prefix_length` and `max_share`
+- `model_visibility`: optional export-time sanitization rules for model-visible `instruction` and `context`, including line-prefix removal, line dropping based on answer-bearing field hits, and value redaction
 - `require_review_file`: when `true`, `scripts/build_loop.py` refuses to run without `--review-file`
 
 Advanced quality gates such as `provenance`, `response_length`, `response_structure`, and `response_prefix` are advisory by default. Set `blocking: true` inside a section only when you want that rule to stop the build loop from completing.
 
 Those reasoning-heavy phases are handled by the host IDE agent via [`SKILL.md`](./SKILL.md) and [`sub-skills/`](./sub-skills/), which matches the Codex / Antigravity / Claude Code skill model.
 
-`scripts/generate.py`, `scripts/coverage.py`, and `scripts/build_loop.py` are deterministic orchestration helpers. They do not call external LLM-provider APIs. Semantic judging still comes from the host agent via the review-file contract.
+`scripts/generate.py`, `scripts/coverage.py`, `scripts/build_loop.py`, and `scripts/export.py` are deterministic orchestration helpers. They do not call external LLM-provider APIs. Semantic judging still comes from the host agent via the review-file contract.
 
 ## Architecture
 

@@ -292,6 +292,8 @@ def build_export_args(args: argparse.Namespace, db_path: Path, output_dir: Path)
         command.extend(["--from-status", status])
     if args.schema_file:
         command.extend(["--schema-file", args.schema_file])
+    if args.plan_file:
+        command.extend(["--plan-file", args.plan_file])
     return command
 
 

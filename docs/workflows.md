@@ -95,9 +95,12 @@ Generic plan fields now supported by `scripts/coverage.py` and `scripts/verify.p
 - `response_length`
 - `response_structure`
 - `response_prefix`
+- `model_visibility`
 - `require_review_file`
 
 Advanced quality sections are warn-only by default. Add `blocking: true` inside `provenance`, `response_length`, `response_structure`, or `response_prefix` only when you want that specific issue to prevent completion.
+
+When the dataset keeps answer-bearing metadata for audit or analytics but the model should not see those values verbatim, define `model_visibility` in the plan. `scripts/export.py` and `scripts/build_loop.py --export-format ...` will apply those rules to exported `instruction` and `context` fields while leaving metadata intact.
 
 ## Audit & Verify Flow
 
@@ -135,6 +138,7 @@ Options:
 - preset HuggingFace export
 - flat CSV export
 - flat JSONL export
+- optional `--plan-file` so exported `instruction` and `context` honor any `model_visibility` rules
 - custom flat schema export
 
 ## Source-Type Guide

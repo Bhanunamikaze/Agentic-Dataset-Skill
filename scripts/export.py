@@ -13,9 +13,11 @@ if __name__ == "__main__" or not getattr(sys.modules.get(__name__, None), "__pac
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.utils.canonical import row_to_record
+from scripts.utils.coverage_plan import load_plan
 from scripts.utils.db import fetch_records_by_status, get_connection, initialize_database
 from scripts.utils.files import write_csv, write_json, write_jsonl
 from scripts.utils.schema import load_flat_export_schema
+from scripts.utils.visibility import sanitize_records_for_model_visibility
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_FLAT_SCHEMA = ROOT_DIR / "resources" / "target-schemas" / "csv_columns.json"
@@ -53,6 +55,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--schema-file",
         help="Optional flat target schema file for csv/jsonl exports.",
+    )
+    parser.add_argument(
+        "--plan-file",
+        help="Optional coverage/quality plan used for model-visibility redaction during export.",
     )
     parser.add_argument(
         "--db",
@@ -199,6 +205,7 @@ def summarize_records(
     schema_file: str | None,
     flat_schema: dict[str, Any],
     output_files: list[str],
+    visibility_summary: dict[str, Any],
 ) -> dict[str, Any]:
     judge_values = [record["judge_score"] for record in records if record.get("judge_score") is not None]
     summary = {
@@ -221,6 +228,7 @@ def summarize_records(
             [str(record["metadata"].get("persona", "unknown")) for record in records]
         ),
         "judge_score_distribution": dict(sorted(Counter(judge_values).items())),
+        "model_visibility": visibility_summary,
         "files": output_files,
     }
     return summary
@@ -343,6 +351,7 @@ def main() -> None:
     args = parse_args()
     if not 0 <= args.split <= 1:
         raise SystemExit("--split must be between 0 and 1 inclusive")
+    plan = load_plan(args.plan_file)
 
     db_path = initialize_database(args.db) if args.db else initialize_database()
     output_dir = Path(args.output_dir)
@@ -359,6 +368,17 @@ def main() -> None:
         connection.close()
 
     train_records, test_records = split_records(records, args.split, args.seed)
+    train_records, train_visibility = sanitize_records_for_model_visibility(train_records, plan)
+    test_records, test_visibility = sanitize_records_for_model_visibility(test_records, plan)
+    visibility_summary = {
+        "enabled": bool(train_visibility.get("enabled") or test_visibility.get("enabled")),
+        "instruction_modified": int(train_visibility.get("instruction_modified", 0))
+        + int(test_visibility.get("instruction_modified", 0)),
+        "context_modified": int(train_visibility.get("context_modified", 0))
+        + int(test_visibility.get("context_modified", 0)),
+        "records_modified": int(train_visibility.get("records_modified", 0))
+        + int(test_visibility.get("records_modified", 0)),
+    }
     written_files: list[str] = []
     flat_schema_path = Path(args.schema_file) if args.schema_file else DEFAULT_FLAT_SCHEMA
     flat_schema = load_flat_export_schema(flat_schema_path)
@@ -425,6 +445,7 @@ def main() -> None:
         schema_file=str(flat_schema_path),
         flat_schema=flat_schema,
         output_files=written_files,
+        visibility_summary=visibility_summary,
     )
     data_card_path = write_data_card(output_dir / "DATA_CARD.md", summary)
     summary["files"] = written_files + [str(data_card_path)]

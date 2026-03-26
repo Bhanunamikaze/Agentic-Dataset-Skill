@@ -1761,6 +1761,204 @@ class AdditionalCoverageTests(unittest.TestCase):
         self.assertEqual(roles, ["system", "user", "assistant"])
         self.assertEqual(result["messages"][0]["content"], "You are a Linux tutor.")
 
+    def test_model_visibility_can_strip_answer_bearing_prompt_content(self) -> None:
+        from scripts.utils.visibility import sanitize_record_for_model_visibility
+
+        record = {
+            "instruction": (
+                "Validate whether this trace is exploitable.\n"
+                "Case profile: the tainted source is query parameter q and the suspected sink is "
+                "server_template_raw_html for reflected XSS.\n"
+                "Trace fingerprint: app search q reflected server_template_raw_html\n"
+                "Focus parameter: q\n"
+            ),
+            "context": (
+                "Only treat the sample as vulnerable when the supplied trace shows execution.\n"
+                "Validation lens: correlate q with server_template_raw_html for reflected XSS.\n"
+                "Case fingerprint: app search q reflected server_template_raw_html\n"
+            ),
+            "response": {
+                "format": "single",
+                "text": json.dumps(
+                    {
+                        "verdict": "vulnerable",
+                        "xss_type": "reflected",
+                        "tested_parameter": "q",
+                        "sink": "server_template_raw_html",
+                    }
+                ),
+            },
+            "metadata": {"difficulty": "medium", "persona": "reviewer"},
+        }
+        plan = {
+            "model_visibility": {
+                "instruction": {
+                    "remove_line_prefixes": [
+                        "Trace fingerprint:",
+                        "Focus parameter:",
+                    ],
+                    "remove_lines_with_fields": {
+                        "paths": [
+                            "response.xss_type",
+                            "response.tested_parameter",
+                            "response.sink",
+                        ],
+                        "min_hits": 2,
+                    },
+                },
+                "context": {
+                    "remove_line_prefixes": ["Case fingerprint:"],
+                    "remove_lines_with_fields": {
+                        "paths": [
+                            "response.xss_type",
+                            "response.tested_parameter",
+                            "response.sink",
+                        ],
+                        "min_hits": 2,
+                    },
+                    "redact_field_values": ["response.verdict"],
+                },
+            }
+        }
+
+        sanitized, changes = sanitize_record_for_model_visibility(record, plan)
+
+        self.assertTrue(changes["instruction"])
+        self.assertTrue(changes["context"])
+        self.assertNotIn("Trace fingerprint:", sanitized["instruction"])
+        self.assertNotIn("Focus parameter:", sanitized["instruction"])
+        self.assertNotIn("server_template_raw_html", sanitized["instruction"])
+        self.assertNotIn("reflected", sanitized["instruction"].lower())
+        self.assertNotIn("Case fingerprint:", sanitized["context"])
+        self.assertNotIn("server_template_raw_html", sanitized["context"])
+        self.assertNotIn("reflected", sanitized["context"].lower())
+        self.assertNotIn("vulnerable", sanitized["context"].lower())
+        self.assertEqual(sanitized["metadata"], record["metadata"])
+
+    def test_build_loop_export_applies_model_visibility_rules_from_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            batch_path = temp_dir / "batch.jsonl"
+            review_path = temp_dir / "review.jsonl"
+            plan_path = temp_dir / "coverage_plan.json"
+            output_dir = temp_dir / "exports"
+
+            batch_path.write_text(
+                json.dumps(
+                    {
+                        "id": "visibility_a",
+                        "instruction": (
+                            "Validate whether this trace is exploitable.\n"
+                            "Return only valid JSON with keys verdict, xss_type, tested_parameter, sink.\n"
+                            "Case profile: the tainted source is query parameter q and the suspected sink is "
+                            "server_template_raw_html for reflected XSS.\n"
+                            "Trace fingerprint: app search q reflected server_template_raw_html\n"
+                            "Focus parameter: q\n"
+                        ),
+                        "context": (
+                            "Only treat the sample as vulnerable when the supplied trace shows execution.\n"
+                            "Validation lens: correlate q with server_template_raw_html for reflected XSS.\n"
+                            "Case fingerprint: app search q reflected server_template_raw_html\n"
+                        ),
+                        "response": {
+                            "format": "single",
+                            "text": json.dumps(
+                                {
+                                    "verdict": "vulnerable",
+                                    "xss_type": "reflected",
+                                    "tested_parameter": "q",
+                                    "sink": "server_template_raw_html",
+                                }
+                            ),
+                        },
+                        "metadata": {
+                            "difficulty": "medium",
+                            "persona": "reviewer",
+                            "source_origin": "synthetic",
+                            "response_family": "verdict_first",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            review_path.write_text(
+                json.dumps({"id": "visibility_a", "score": 5, "reason": "Clear.", "status": "pass"})
+                + "\n",
+                encoding="utf-8",
+            )
+            plan_path.write_text(
+                json.dumps(
+                    {
+                        "target_effective_count": 1,
+                        "model_visibility": {
+                            "instruction": {
+                                "remove_line_prefixes": [
+                                    "Trace fingerprint:",
+                                    "Focus parameter:",
+                                ],
+                                "remove_lines_with_fields": {
+                                    "paths": [
+                                        "response.xss_type",
+                                        "response.tested_parameter",
+                                        "response.sink",
+                                    ],
+                                    "min_hits": 2,
+                                },
+                            },
+                            "context": {
+                                "remove_line_prefixes": ["Case fingerprint:"],
+                                "remove_lines_with_fields": {
+                                    "paths": [
+                                        "response.xss_type",
+                                        "response.tested_parameter",
+                                        "response.sink",
+                                    ],
+                                    "min_hits": 2,
+                                },
+                                "redact_field_values": ["response.verdict"],
+                            },
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_script(
+                "scripts/build_loop.py",
+                "--batch", str(batch_path),
+                "--plan-file", str(plan_path),
+                "--review-file", str(review_path),
+                "--export-format", "openai",
+                "--split", "0.0",
+                "--output-dir", str(output_dir),
+            )
+            summary = json.loads(result.stdout)
+
+            self.assertTrue(summary["complete"])
+            self.assertIsNotNone(summary["export"])
+            self.assertTrue(summary["export"]["model_visibility"]["enabled"])
+            self.assertEqual(summary["export"]["model_visibility"]["records_modified"], 1)
+
+            records = [
+                json.loads(line)
+                for line in (output_dir / "openai_train.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(len(records), 1)
+            messages = records[0]["messages"]
+            self.assertEqual(messages[0]["role"], "system")
+            self.assertEqual(messages[1]["role"], "user")
+            self.assertNotIn("Case fingerprint:", messages[0]["content"])
+            self.assertNotIn("server_template_raw_html", messages[0]["content"])
+            self.assertNotIn("reflected", messages[0]["content"].lower())
+            self.assertNotIn("vulnerable", messages[0]["content"].lower())
+            self.assertNotIn("Trace fingerprint:", messages[1]["content"])
+            self.assertNotIn("Focus parameter:", messages[1]["content"])
+            self.assertNotIn("server_template_raw_html", messages[1]["content"])
+            self.assertNotIn("reflected", messages[1]["content"].lower())
+
 
 
 class CollectorTests(unittest.TestCase):

@@ -131,6 +131,7 @@ The coverage plan should define:
 - optional `response_length` rules to cap median answer size or the share of oversized responses
 - optional `response_structure` rules to prevent one dominant JSON or text skeleton from taking over the corpus
 - optional `response_prefix` limits to prevent one repeated opening from dominating the corpus
+- optional `model_visibility` rules to sanitize model-visible `instruction` and `context` during export without dropping audit metadata
 - optional `require_review_file: true` to make semantic LLM review mandatory during the build loop
 
 These advanced sections are advisory unless you set `blocking: true` inside that section. This keeps fixed-envelope or HTTP-heavy datasets from being rejected by default while still surfacing the findings.
@@ -176,7 +177,7 @@ The final dedup pass still runs before export, but it is not a substitute for ge
 9. Read `sub-skills/formatter-exporter.md` and export the dataset plus data card:
 
 ```bash
-python3 scripts/export.py --format <openai|huggingface|csv|jsonl|all> [--schema-file <schema.json>] [--split 0.1]
+python3 scripts/export.py --format <openai|huggingface|csv|jsonl|all> [--schema-file <schema.json>] [--split 0.1] [--plan-file <coverage_plan.json>]
 ```
 
 ### 2. `dataset verify`

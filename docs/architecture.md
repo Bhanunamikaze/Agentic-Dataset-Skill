@@ -70,6 +70,7 @@ Responsibilities:
 - manage resumable SQLite state
 - apply deterministic heuristics plus plan-driven required-field and provenance gates
 - apply duplicate suppression
+- sanitize model-visible `instruction` and `context` during export when the plan defines `model_visibility`
 - export into fixed presets or custom flat schemas
 - collect and chunk content from web searches, URLs, and local files (`collect.py`)
 
