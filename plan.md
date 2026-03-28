@@ -80,17 +80,17 @@ Definitions:
 | ID | Task | Deliverables | Status |
 |---|---|---|---|
 | SI-00 | Create branch and planning baseline | `coding-dataset` branch, `plan.md` | `completed` |
-| SI-01 | Add structured ingestion entry point | `scripts/ingest.py`, CLI arguments, run directory creation, summary report | `pending` |
+| SI-01 | Add structured ingestion entry point | `scripts/ingest.py`, CLI arguments, run directory creation, summary report | `completed` |
 | SI-02 | Add source artifact schema and helpers | `resources/internal-schema/source_artifact_schema.json`, `scripts/utils/artifacts.py` | `completed` |
 | SI-03 | Add discovery layer | `scripts/utils/discovery.py`, source classification, project detection, file manifests | `completed` |
-| SI-04 | Add parser registry | `scripts/utils/parsers/base.py`, parser dispatch by file type | `in_progress` |
-| SI-05 | Implement C/C++ parser core | symbol extraction, include extraction, companion file detection, fallback heuristic mode | `pending` |
-| SI-06 | Add Visual Studio project awareness | `.sln`, `.vcxproj`, `.vcxproj.filters` parsing and project membership mapping | `pending` |
-| SI-07 | Build C/C++ context bundler | bundle primary file with related headers, sources, project metadata, and include neighbors | `pending` |
-| SI-08 | Implement HTML/HTM/MHTML parser | DOM cleanup, code block extraction, snippet context windows, provenance capture | `pending` |
-| SI-09 | Add automatic draft generation from bundles | transform `bundles.jsonl` into canonical dataset drafts for downstream pipeline use | `pending` |
-| SI-10 | Integrate with existing pipeline | import generated drafts through `generate.py`, preserve provenance metadata | `pending` |
-| SI-11 | Add tests and fixtures | C repo fixture, C++ repo fixture, Visual Studio fixture, HTML/MHTML fixture, end-to-end tests | `pending` |
+| SI-04 | Add parser registry | `scripts/utils/parsers/base.py`, parser dispatch by file type | `completed` |
+| SI-05 | Implement C/C++ parser core | symbol extraction, include extraction, companion file detection, fallback heuristic mode | `completed` |
+| SI-06 | Add Visual Studio project awareness | `.sln`, `.vcxproj`, `.vcxproj.filters` parsing and project membership mapping | `completed` |
+| SI-07 | Build C/C++ context bundler | bundle primary file with related headers, sources, project metadata, and include neighbors | `completed` |
+| SI-08 | Implement HTML/HTM/MHTML parser | DOM cleanup, code block extraction, snippet context windows, provenance capture | `completed` |
+| SI-09 | Add automatic draft generation from bundles | transform `bundles.jsonl` into canonical dataset drafts for downstream pipeline use | `completed` |
+| SI-10 | Integrate with existing pipeline | import generated drafts through `generate.py`, preserve provenance metadata | `completed` |
+| SI-11 | Add tests and fixtures | C repo fixture, C++ repo fixture, Visual Studio fixture, HTML/MHTML fixture, end-to-end tests | `in_progress` |
 | SI-12 | Update docs and skill instructions | `README.md`, `docs/workflows.md`, `SKILL.md`, usage examples | `pending` |
 
 ## Execution Phases
@@ -110,7 +110,7 @@ Tasks:
 - `SI-03`
 - `SI-04`
 
-Status: `in_progress`
+Status: `completed`
 
 ### Phase 2: C/C++ Repository Parsing
 
@@ -127,7 +127,7 @@ Tasks:
 - `SI-06`
 - `SI-07`
 
-Status: `pending`
+Status: `completed`
 
 ### Phase 3: HTML, HTM, and MHTML Parsing
 
@@ -141,7 +141,7 @@ Tasks:
 
 - `SI-08`
 
-Status: `pending`
+Status: `completed`
 
 ### Phase 4: Dataset Draft Automation
 
@@ -156,7 +156,7 @@ Tasks:
 - `SI-09`
 - `SI-10`
 
-Status: `pending`
+Status: `completed`
 
 ### Phase 5: Reliability and Documentation
 
@@ -170,7 +170,7 @@ Tasks:
 - `SI-11`
 - `SI-12`
 
-Status: `pending`
+Status: `in_progress`
 
 ## V1 Parsing Rules
 

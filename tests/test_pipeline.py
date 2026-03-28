@@ -2293,6 +2293,135 @@ class CollectorTests(unittest.TestCase):
         file_paths = {Path(item["source_path"]).name for item in discovered["files"]}
         self.assertEqual(file_paths, {"main.cpp", "main.h", "guide.html"})
 
+    def test_c_family_parser_bundles_related_source_and_header_files(self) -> None:
+        from scripts.utils.discovery import discover_source_files
+        from scripts.utils.parsers.c_family import parse_c_family_corpus
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_dir = Path(tmpdir)
+            (temp_dir / "src").mkdir()
+            (temp_dir / "include").mkdir()
+            (temp_dir / "app.sln").write_text(
+                'Project("{GUID}") = "demo", "demo.vcxproj", "{PROJECT-GUID}"\n',
+                encoding="utf-8",
+            )
+            (temp_dir / "demo.vcxproj").write_text(
+                "<Project><ItemGroup>"
+                '<ClCompile Include="src/main.cpp" />'
+                '<ClInclude Include="include/main.h" />'
+                "</ItemGroup></Project>",
+                encoding="utf-8",
+            )
+            (temp_dir / "src" / "main.cpp").write_text(
+                '#include "main.h"\nint add(int a, int b) { return a + b; }\n',
+                encoding="utf-8",
+            )
+            (temp_dir / "include" / "main.h").write_text(
+                "int add(int a, int b);\n",
+                encoding="utf-8",
+            )
+
+            discovered = discover_source_files([str(temp_dir)], max_files=20)
+            c_family_files = [
+                item for item in discovered["files"]
+                if item["metadata"]["parser_key"] == "c_family"
+            ]
+            parsed = parse_c_family_corpus(c_family_files, bundle_max_chars=6000)
+
+        self.assertGreaterEqual(len(parsed["bundles"]), 1)
+        bundle = parsed["bundles"][0]
+        self.assertEqual(bundle["kind"], "c_family_context")
+        self.assertIn("main.cpp", bundle["content"])
+        self.assertIn("include/main.h", "\n".join(bundle["metadata"]["include_lines"]))
+        self.assertIn("demo", bundle["metadata"]["project_names"])
+        relation_kinds = {item["kind"] for item in parsed["relations"]}
+        self.assertIn("includes", relation_kinds)
+        self.assertIn("project_contains_file", relation_kinds)
+
+    def test_article_parser_extracts_html_snippet_with_context(self) -> None:
+        from scripts.utils.discovery import discover_source_files
+        from scripts.utils.parsers.html import parse_article_corpus
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_dir = Path(tmpdir)
+            html_path = temp_dir / "guide.html"
+            html_path.write_text(
+                "<html><head><title>Guide</title></head><body>"
+                "<h2>Setup</h2>"
+                "<p>Compile the example with your normal toolchain.</p>"
+                "<pre><code>#include <stdio.h>\nint main() { return 0; }</code></pre>"
+                "<p>This program returns success.</p>"
+                "</body></html>",
+                encoding="utf-8",
+            )
+
+            discovered = discover_source_files([str(html_path)], max_files=10)
+            parsed = parse_article_corpus(discovered["files"], bundle_max_chars=4000)
+
+        self.assertEqual(len(parsed["bundles"]), 1)
+        bundle = parsed["bundles"][0]
+        self.assertEqual(bundle["kind"], "article_snippet_context")
+        self.assertIn("Compile the example", bundle["content"])
+        self.assertIn("This program returns success", bundle["content"])
+        self.assertEqual(bundle["metadata"]["heading"], "Setup")
+        self.assertEqual(bundle["metadata"]["snippet_language"], "c_cpp")
+
+    def test_ingest_script_writes_artifacts_and_imports_structured_drafts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_dir = Path(tmpdir)
+            source_dir = temp_dir / "repo"
+            source_dir.mkdir()
+            db_path = temp_dir / "state.sqlite"
+            output_dir = temp_dir / "ingest_output"
+
+            (source_dir / "sample.cpp").write_text(
+                '#include "sample.h"\nint meaning(void) { return 42; }\n',
+                encoding="utf-8",
+            )
+            (source_dir / "sample.h").write_text(
+                "int meaning(void);\n",
+                encoding="utf-8",
+            )
+            (source_dir / "notes.html").write_text(
+                "<html><body><h1>Meaning</h1><p>Use the helper below.</p>"
+                "<pre>int meaning(void);</pre><p>The declaration is shared.</p>"
+                "</body></html>",
+                encoding="utf-8",
+            )
+
+            result = run_script(
+                "scripts/ingest.py",
+                "--paths", str(source_dir),
+                "--output-dir", str(output_dir),
+                "--db", str(db_path),
+                "--tool-context", "codex",
+                "--bundle-max-chars", "5000",
+            )
+            summary = json.loads(result.stdout)
+
+            self.assertEqual(summary["counts"]["files"], 3)
+            self.assertGreaterEqual(summary["counts"]["bundles"], 2)
+            self.assertGreaterEqual(summary["counts"]["drafts"], 2)
+            self.assertEqual(summary["import"]["failed"], 0)
+            self.assertTrue((output_dir / "manifest.json").exists())
+            self.assertTrue((output_dir / "files.jsonl").exists())
+            self.assertTrue((output_dir / "bundles.jsonl").exists())
+            self.assertTrue((output_dir / "drafts.jsonl").exists())
+
+            import sqlite3 as _sqlite3
+
+            conn = _sqlite3.connect(db_path)
+            try:
+                rows = conn.execute(
+                    "SELECT COUNT(*), MIN(source_type), MAX(source_type) FROM records"
+                ).fetchone()
+            finally:
+                conn.close()
+
+            self.assertGreaterEqual(rows[0], 2)
+            self.assertEqual(rows[1], "structured_source")
+            self.assertEqual(rows[2], "structured_source")
+
 
 if __name__ == "__main__":
     unittest.main()
