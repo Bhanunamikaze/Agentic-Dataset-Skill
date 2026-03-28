@@ -18,7 +18,7 @@ This path must:
 
 - Default flow: `directory -> parsed artifacts -> dataset drafts` automatically
 - Optional parser dependencies are allowed
-- V1 source scope: `c`, `cc`, `cpp`, `cxx`, `h`, `hh`, `hpp`, `hxx`, `inl`, `html`, `htm`, `mhtml`, `md`, `txt`, and code/text files already handled by the repo
+- V1 source scope: `c`, `cc`, `cpp`, `cxx`, `h`, `hh`, `hpp`, `hxx`, `inl`, `asm`, `s`, `inc`, `asmx`, `html`, `htm`, `mhtml`, `md`, `txt`, and code/text files already handled by the repo
 - Deferred for later: `pdf`, `docx`, binary document formats, and compilation/build execution
 
 ## Status Legend

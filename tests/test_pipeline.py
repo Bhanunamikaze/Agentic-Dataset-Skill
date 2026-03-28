@@ -2268,6 +2268,8 @@ class CollectorTests(unittest.TestCase):
 
         self.assertEqual(classify_source_path("src/main.cpp")["parser_key"], "c_family")
         self.assertEqual(classify_source_path("include/main.h")["file_kind"], "c_header")
+        self.assertEqual(classify_source_path("decoder.asm")["file_kind"], "assembly_source")
+        self.assertEqual(classify_source_path("shared.inc")["file_kind"], "assembly_include")
         self.assertEqual(classify_source_path("sample.sln")["file_kind"], "visual_studio_solution")
         self.assertEqual(classify_source_path("project.vcxproj")["parser_key"], "c_family")
         self.assertEqual(classify_source_path("guide.html")["parser_key"], "article")
@@ -2283,6 +2285,8 @@ class CollectorTests(unittest.TestCase):
             (temp_dir / ".git").mkdir()
             (temp_dir / "src" / "main.cpp").write_text("int main() { return 0; }\n", encoding="utf-8")
             (temp_dir / "src" / "main.h").write_text("int main();\n", encoding="utf-8")
+            (temp_dir / "src" / "decoder.asm").write_text("Decoder PROC\n nop\nDecoder ENDP\n", encoding="utf-8")
+            (temp_dir / "src" / "shared.inc").write_text("PUBLIC SharedLabel\n", encoding="utf-8")
             (temp_dir / "guide.html").write_text("<html><body><pre>printf(\"hi\");</pre></body></html>", encoding="utf-8")
             (temp_dir / ".git" / "ignored.cpp").write_text("int ignored() { return 1; }\n", encoding="utf-8")
             (temp_dir / "image.png").write_bytes(b"\x89PNG\r\n")
@@ -2291,7 +2295,7 @@ class CollectorTests(unittest.TestCase):
 
         self.assertEqual(discovered["skipped"], [])
         file_paths = {Path(item["source_path"]).name for item in discovered["files"]}
-        self.assertEqual(file_paths, {"main.cpp", "main.h", "guide.html"})
+        self.assertEqual(file_paths, {"main.cpp", "main.h", "decoder.asm", "shared.inc", "guide.html"})
 
     def test_c_family_parser_bundles_related_source_and_header_files(self) -> None:
         from scripts.utils.discovery import discover_source_files
@@ -2309,6 +2313,8 @@ class CollectorTests(unittest.TestCase):
                 "<Project><ItemGroup>"
                 '<ClCompile Include="src/main.cpp" />'
                 '<ClInclude Include="include/main.h" />'
+                '<MASM Include="src/decoder.asm" />'
+                '<MASM Include="src/shared.inc" />'
                 "</ItemGroup></Project>",
                 encoding="utf-8",
             )
@@ -2318,6 +2324,14 @@ class CollectorTests(unittest.TestCase):
             )
             (temp_dir / "include" / "main.h").write_text(
                 "int add(int a, int b);\n",
+                encoding="utf-8",
+            )
+            (temp_dir / "src" / "decoder.asm").write_text(
+                "INCLUDE shared.inc\nDecoder PROC\n nop\nDecoder ENDP\nSharedLabel:\n ret\n",
+                encoding="utf-8",
+            )
+            (temp_dir / "src" / "shared.inc").write_text(
+                "PUBLIC SharedLabel\n",
                 encoding="utf-8",
             )
 
@@ -2332,8 +2346,14 @@ class CollectorTests(unittest.TestCase):
         bundle = parsed["bundles"][0]
         self.assertEqual(bundle["kind"], "c_family_context")
         self.assertIn("main.cpp", bundle["content"])
+        self.assertIn("decoder.asm", bundle["content"])
+        self.assertIn("shared.inc", bundle["content"])
         self.assertIn("include/main.h", "\n".join(bundle["metadata"]["include_lines"]))
+        self.assertIn("shared.inc", "\n".join(bundle["metadata"]["include_lines"]))
         self.assertIn("demo", bundle["metadata"]["project_names"])
+        self.assertIn("decoder.asm", "\n".join(bundle["metadata"]["assembly_files"]))
+        self.assertIn("shared.inc", "\n".join(bundle["metadata"]["assembly_files"]))
+        self.assertIn("Decoder", " ".join(bundle["metadata"]["symbol_names"]))
         relation_kinds = {item["kind"] for item in parsed["relations"]}
         self.assertIn("includes", relation_kinds)
         self.assertIn("project_contains_file", relation_kinds)

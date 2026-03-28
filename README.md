@@ -58,6 +58,7 @@ Use `scripts/ingest.py` when the user already has a local directory of source ma
 Current V1 support includes:
 
 - C and C++ source/header repos
+- Assembly source and include files such as `.asm`, `.s`, and `.inc`
 - Visual Studio `.sln`, `.vcxproj`, and `.vcxproj.filters` project structure
 - `html`, `htm`, and `mhtml` article parsing
 - `md` and `txt` article-style source files

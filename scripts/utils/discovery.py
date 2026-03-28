@@ -16,6 +16,14 @@ _C_FAMILY_EXTENSIONS: frozenset[str] = frozenset({
     ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl",
 })
 
+_ASSEMBLY_EXTENSIONS: frozenset[str] = frozenset({
+    ".asm", ".s", ".asmx",
+})
+
+_ASSEMBLY_INCLUDE_EXTENSIONS: frozenset[str] = frozenset({
+    ".inc",
+})
+
 _ARTICLE_EXTENSIONS: frozenset[str] = frozenset({
     ".html", ".htm", ".mhtml", ".md", ".txt",
 })
@@ -60,6 +68,20 @@ def classify_source_path(path: str | Path) -> dict[str, Any]:
             "supported": True,
             "file_kind": "c_header" if suffix in {".h", ".hh", ".hpp", ".hxx", ".inl"} else "c_source",
             "language": "c_cpp",
+            "parser_key": "c_family",
+        }
+    if suffix in _ASSEMBLY_EXTENSIONS:
+        return {
+            "supported": True,
+            "file_kind": "assembly_source",
+            "language": "assembly",
+            "parser_key": "c_family",
+        }
+    if suffix in _ASSEMBLY_INCLUDE_EXTENSIONS:
+        return {
+            "supported": True,
+            "file_kind": "assembly_include",
+            "language": "assembly",
             "parser_key": "c_family",
         }
     if suffix in {".html", ".htm"}:

@@ -22,6 +22,7 @@ Use this when the user already has a local directory or file set and wants an au
 Current V1 parsing coverage:
 
 - C/C++ source and header files
+- assembly source and include files such as `.asm`, `.s`, and `.inc`
 - Visual Studio `.sln`, `.vcxproj`, and `.vcxproj.filters`
 - `html`, `htm`, `mhtml`, `md`, and `txt`
 

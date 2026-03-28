@@ -19,6 +19,12 @@ _FUNCTION_PATTERN = re.compile(
     r'[\w:\<\>\~\*&\s]+\s+([A-Za-z_~]\w*(?:::\w+)*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:;|\{)',
     re.MULTILINE,
 )
+_ASM_PROC_PATTERN = re.compile(r'^\s*([A-Za-z_@?][\w@$?]*)\s+PROC\b', re.MULTILINE | re.IGNORECASE)
+_ASM_LABEL_PATTERN = re.compile(r'^\s*([A-Za-z_@?][\w@$?]*)\s*:\s*(?:;.*)?$', re.MULTILINE)
+_ASM_INCLUDE_PATTERN = re.compile(r'^\s*(?:INCLUDE|INCLUDELIB)\s+([^\s;]+)', re.MULTILINE | re.IGNORECASE)
+_PROJECT_MEMBER_TAGS = {
+    "ClCompile", "ClInclude", "None", "Text", "MASM", "CustomBuild", "CustomBuildStep"
+}
 
 
 def _strip_namespace(tag: str) -> str:
@@ -100,15 +106,68 @@ def _extract_symbols(file_record: dict[str, Any]) -> list[dict[str, Any]]:
     return symbols
 
 
+def _extract_assembly_symbols(file_record: dict[str, Any]) -> list[dict[str, Any]]:
+    content = str(file_record.get("content") or "")
+    source_path = str(file_record["source_path"])
+    symbols: list[dict[str, Any]] = []
+
+    def add_symbol(kind: str, name: str, start: int, end: int) -> None:
+        symbols.append(
+            build_unit(
+                kind=f"assembly_{kind}",
+                source_path=source_path,
+                title=name,
+                language="assembly",
+                content=_truncate(content[start:end].strip(), 1200),
+                metadata={
+                    "symbol_kind": kind,
+                    "symbol_name": name,
+                    "line_start": _line_number(content, start),
+                    "line_end": _line_number(content, end),
+                    "parser_mode": "heuristic",
+                    "file_id": file_record["id"],
+                },
+                stable_payload={
+                    "source_path": source_path,
+                    "kind": kind,
+                    "name": name,
+                    "start": start,
+                    "end": end,
+                },
+            )
+        )
+
+    for match in _ASM_PROC_PATTERN.finditer(content):
+        proc_name = match.group(1)
+        end_match = re.search(rf'^\s*{re.escape(proc_name)}\s+ENDP\b', content[match.end():], re.MULTILINE | re.IGNORECASE)
+        if end_match:
+            end_offset = match.end() + end_match.end()
+        else:
+            end_offset = min(len(content), match.end() + 600)
+        add_symbol("proc", proc_name, match.start(), end_offset)
+
+    seen_labels: set[str] = {str(item["metadata"].get("symbol_name", "")).lower() for item in symbols}
+    for match in _ASM_LABEL_PATTERN.finditer(content):
+        label = match.group(1)
+        if label.lower() in seen_labels:
+            continue
+        add_symbol("label", label, match.start(), min(len(content), match.end() + 200))
+    return symbols
+
+
 def _extract_includes(file_record: dict[str, Any]) -> list[dict[str, Any]]:
     content = str(file_record.get("content") or "")
     includes: list[dict[str, Any]] = []
-    for match in _INCLUDE_PATTERN.finditer(content):
+    is_assembly = str(file_record.get("kind")) in {"assembly_source", "assembly_include"}
+    pattern = _ASM_INCLUDE_PATTERN if is_assembly else _INCLUDE_PATTERN
+    for match in pattern.finditer(content):
+        include_name = match.group(1 if is_assembly else 2).strip()
         includes.append(
             {
-                "include": match.group(2).strip(),
-                "delimiter": match.group(1),
+                "include": include_name,
+                "delimiter": "" if is_assembly else match.group(1),
                 "line": _line_number(content, match.start()),
+                "syntax": "assembly" if is_assembly else "preprocessor",
             }
         )
     return includes
@@ -155,7 +214,7 @@ def _parse_vcxproj_files(file_record: dict[str, Any]) -> dict[str, Any]:
 
     for node in root.iter():
         tag = _strip_namespace(node.tag)
-        if tag not in {"ClCompile", "ClInclude", "None", "Text"}:
+        if tag not in _PROJECT_MEMBER_TAGS:
             continue
         include = node.attrib.get("Include")
         if not include:
@@ -177,7 +236,7 @@ def _parse_vcxproj_filters(file_record: dict[str, Any]) -> dict[str, str]:
     filters: dict[str, str] = {}
     for node in root.iter():
         tag = _strip_namespace(node.tag)
-        if tag not in {"ClCompile", "ClInclude", "None", "Text"}:
+        if tag not in _PROJECT_MEMBER_TAGS:
             continue
         include = node.attrib.get("Include")
         if not include:
@@ -228,7 +287,7 @@ def _build_bundle_content(
     bundle_max_chars: int,
 ) -> str:
     sections = [
-        "Bundle Type: C/C++ source context",
+        "Bundle Type: C/C++/Assembly source context",
         f"Primary File: {primary_file['source_path']}",
     ]
     if project_names:
@@ -308,13 +367,16 @@ def parse_c_family_corpus(
 
     c_code_files = [
         item for item in files
-        if str(item["kind"]) in {"c_source", "c_header"}
+        if str(item["kind"]) in {"c_source", "c_header", "assembly_source", "assembly_include"}
     ]
 
     includes_by_path: dict[str, list[dict[str, Any]]] = {}
     symbols_by_path: dict[str, list[dict[str, Any]]] = {}
     for item in c_code_files:
-        symbols = _extract_symbols(item)
+        if str(item["kind"]) in {"assembly_source", "assembly_include"}:
+            symbols = _extract_assembly_symbols(item)
+        else:
+            symbols = _extract_symbols(item)
         symbols_by_path[str(item["source_path"])] = symbols
         units.extend(symbols)
         includes = _extract_includes(item)
@@ -358,7 +420,13 @@ def parse_c_family_corpus(
     for group_items in groups_by_stem.values():
         sorted_group = sorted(
             group_items,
-            key=lambda item: (0 if str(item["kind"]) == "c_source" else 1, str(item["source_path"])),
+            key=lambda item: (
+                0 if str(item["kind"]) == "c_source" else
+                1 if str(item["kind"]) == "c_header" else
+                2 if str(item["kind"]) == "assembly_source" else
+                3,
+                str(item["source_path"]),
+            ),
         )
         primary = sorted_group[0]
         primary_path = str(primary["source_path"])
@@ -375,9 +443,24 @@ def parse_c_family_corpus(
                     files_by_path,
                     files_by_name,
                 )
-                if resolved_path and resolved_path in files_by_path and files_by_path[resolved_path]["kind"] in {"c_source", "c_header"}:
+                if resolved_path and resolved_path in files_by_path and files_by_path[resolved_path]["kind"] in {"c_source", "c_header", "assembly_source", "assembly_include"}:
                     related_map.setdefault(resolved_path, files_by_path[resolved_path])
             processed.add(path)
+
+        project_paths_for_group = {
+            project["project_path"]
+            for item in list(related_map.values())
+            for project in project_memberships.get(str(item["source_path"]), [])
+        }
+        if project_paths_for_group:
+            for candidate in c_code_files:
+                candidate_path = str(candidate["source_path"])
+                memberships = project_memberships.get(candidate_path, [])
+                if not memberships:
+                    continue
+                if any(project["project_path"] in project_paths_for_group for project in memberships):
+                    related_map.setdefault(candidate_path, candidate)
+                    processed.add(candidate_path)
 
         related_files = list(related_map.values())
         related_files.sort(key=lambda item: str(item["source_path"]))
@@ -443,12 +526,17 @@ def parse_c_family_corpus(
             kind="c_family_context",
             source_path=primary_path,
             title=Path(primary_path).name,
-            language="c_cpp",
+            language="assembly" if str(primary.get("kind")) in {"assembly_source", "assembly_include"} else "c_cpp",
             content=bundle_content,
             related_paths=[str(item["source_path"]) for item in related_files],
             metadata={
                 "primary_file": primary_path,
                 "file_paths": [str(item["source_path"]) for item in related_files],
+                "assembly_files": [
+                    str(item["source_path"])
+                    for item in related_files
+                    if str(item["kind"]) in {"assembly_source", "assembly_include"}
+                ],
                 "project_names": project_names,
                 "project_paths": sorted({
                     project["project_path"]

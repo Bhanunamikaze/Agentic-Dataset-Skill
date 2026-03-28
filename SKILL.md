@@ -55,7 +55,7 @@ Behavior:
 
 - discovers supported local source files
 - preserves hashes, provenance, and relative paths
-- parses C/C++ source and header files together
+- parses C/C++ source, header, and assembly files together
 - parses Visual Studio `.sln`, `.vcxproj`, and `.vcxproj.filters` structure without compiling
 - extracts code snippets and surrounding context from `html`, `htm`, `mhtml`, `md`, and `txt`
 - writes parsed artifacts under `workspace/ingest_runs/<run_id>/`
@@ -124,6 +124,7 @@ If there is a relevant unfinished or recent run, ask whether to resume or start 
     python3 scripts/ingest.py --paths <path1> [path2 ...] --tool-context <context>
     ```
   - The ingest path writes parsed artifacts, bundles, and canonical drafts under `workspace/ingest_runs/<run_id>/`.
+  - For native-code repos, the parser now keeps Visual Studio project membership plus related C/C++ and assembly files in the same bundle when the project references them.
   - Drafts are imported as `structured_source` records automatically unless `--drafts-only` is used.
   - Continue with verify, dedup, and export if the user wants a deterministic pass, or augment/rewrite through the host IDE agent if higher-variety training examples are needed.
 
