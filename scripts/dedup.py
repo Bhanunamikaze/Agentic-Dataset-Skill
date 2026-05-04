@@ -37,6 +37,12 @@ def parse_args() -> argparse.Namespace:
         help="Similarity threshold for near-duplicate detection.",
     )
     parser.add_argument(
+        "--strategy",
+        choices=("shingle", "tfidf", "minhash"),
+        default="shingle",
+        help="Near-duplicate strategy. minhash currently uses deterministic shingle Jaccard fallback.",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=500,
@@ -95,6 +101,7 @@ def main() -> None:
             records,
             threshold=args.threshold,
             text_fn=record_text,
+            strategy=args.strategy,
         )
         duplicate_ids = {item["duplicate_id"] for item in duplicate_details}
 
@@ -126,6 +133,7 @@ def main() -> None:
         "records_examined": len(records),
         "kept_count": len(kept_ids),
         "duplicate_count": len(duplicate_details),
+        "strategy": args.strategy,
         "duplicates": duplicate_details,
     }
     if args.report:

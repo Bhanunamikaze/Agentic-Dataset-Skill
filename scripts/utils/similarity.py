@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 
@@ -12,6 +14,7 @@ TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 class SimilarityIndex:
     exact_seen: dict[str, str] = field(default_factory=dict)
     shingles_by_id: dict[str, set[str]] = field(default_factory=dict)
+    text_by_id: dict[str, str] = field(default_factory=dict)
 
 
 def tokenize(text: str) -> list[str]:
@@ -37,9 +40,39 @@ def hash_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _tf_vector(text: str) -> Counter[str]:
+    return Counter(tokenize(text))
+
+
+def tfidf_similarity(left_text: str, right_text: str) -> float:
+    left = _tf_vector(left_text)
+    right = _tf_vector(right_text)
+    if not left and not right:
+        return 1.0
+    if not left or not right:
+        return 0.0
+    vocabulary = set(left) | set(right)
+    # Two-document smooth IDF. Terms common to both docs get lower weight.
+    dot = 0.0
+    left_norm = 0.0
+    right_norm = 0.0
+    for term in vocabulary:
+        df = int(term in left) + int(term in right)
+        idf = math.log((1 + 2) / (1 + df)) + 1
+        lv = left.get(term, 0) * idf
+        rv = right.get(term, 0) * idf
+        dot += lv * rv
+        left_norm += lv * lv
+        right_norm += rv * rv
+    if not left_norm or not right_norm:
+        return 0.0
+    return dot / math.sqrt(left_norm * right_norm)
+
+
 def add_to_similarity_index(index: SimilarityIndex, *, record_id: str, text: str) -> None:
     index.exact_seen[hash_text(text)] = record_id
     index.shingles_by_id[record_id] = shingle_set(text)
+    index.text_by_id[record_id] = text
 
 
 def build_similarity_index(
@@ -56,12 +89,22 @@ def build_similarity_index(
     return index
 
 
+def _near_score(*, strategy: str, text: str, shingles: set[str], kept_text: str, kept_tokens: set[str]) -> float:
+    if strategy in ("shingle", "minhash"):
+        # minhash mode currently uses exact shingle Jaccard as a deterministic lightweight fallback.
+        return similarity(shingles, kept_tokens)
+    if strategy == "tfidf":
+        return tfidf_similarity(text, kept_text)
+    raise ValueError(f"Unsupported deduplication strategy: {strategy}")
+
+
 def find_duplicate_for_text(
     index: SimilarityIndex,
     *,
     record_id: str,
     text: str,
     threshold: float,
+    strategy: str = "shingle",
 ) -> dict[str, Any] | None:
     exact_hash = hash_text(text)
     exact_match = index.exact_seen.get(exact_hash)
@@ -77,13 +120,19 @@ def find_duplicate_for_text(
     for kept_id, kept_tokens in index.shingles_by_id.items():
         if kept_id == record_id:
             continue
-        score = similarity(shingles, kept_tokens)
+        score = _near_score(
+            strategy=strategy,
+            text=text,
+            shingles=shingles,
+            kept_text=index.text_by_id.get(kept_id, ""),
+            kept_tokens=kept_tokens,
+        )
         if score < threshold:
             continue
         if best_match is None or score > float(best_match["score"]):
             best_match = {
                 "kept_id": kept_id,
-                "reason": "near",
+                "reason": f"near:{strategy}",
                 "score": score,
             }
     return best_match
@@ -94,6 +143,7 @@ def find_duplicates(
     *,
     threshold: float,
     text_fn: Callable[[Mapping[str, Any]], str],
+    strategy: str = "shingle",
 ) -> tuple[list[str], list[dict[str, Any]]]:
     kept_ids: list[str] = []
     duplicate_details: list[dict[str, Any]] = []
@@ -103,12 +153,12 @@ def find_duplicates(
         record_id = str(record.get("id", "")).strip()
         if not record_id:
             continue
-
         match = find_duplicate_for_text(
             index,
             record_id=record_id,
             text=text_fn(record),
             threshold=threshold,
+            strategy=strategy,
         )
         if match:
             duplicate_details.append(
@@ -120,7 +170,6 @@ def find_duplicates(
                 }
             )
             continue
-
         kept_ids.append(record_id)
         add_to_similarity_index(index, record_id=record_id, text=text_fn(record))
 

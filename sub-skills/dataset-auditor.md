@@ -223,3 +223,19 @@ For each High or Medium finding, emit a concrete, actionable fix:
 | **High** | The dataset will likely produce a misleadingly optimistic eval score or a model that fails on real-world inputs |
 | **Medium** | Reduces dataset utility; acceptable for a prototype but not for a training run |
 | **Low** | Cosmetic or minor distribution skew; worth noting but not blocking |
+
+## Deterministic audit command
+
+Run the corpus audit script before the final handoff:
+
+```bash
+python3 scripts/audit.py --from-status verified_pass --report workspace/audit_report.json --markdown-report workspace/AUDIT_REPORT.md
+```
+
+When train/test canonical exports exist, include them:
+
+```bash
+python3 scripts/audit.py --train workspace/canonical_train.jsonl --test workspace/canonical_test.jsonl
+```
+
+The script checks split disjointness, source diversity, evidence linkage, label balance, taxonomy skew, response templating, and synthetic fingerprints.
