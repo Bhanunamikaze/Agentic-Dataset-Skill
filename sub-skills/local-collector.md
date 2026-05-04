@@ -117,3 +117,7 @@ Then continue with the standard verify → dedup → export pipeline.
 ## Rate Limiting
 
 The script defaults to a 1-second delay between HTTP requests (`--rate-limit 1.0`). Increase this for polite crawling of small sites.
+
+## Raw collection guard
+
+`collect.py` output is source material only. Records with `status: collected` are not training examples and must not be sent directly through verification/export. Convert them into canonical draft records first, or use `scripts/research.py` to create `evidence.jsonl` and draft records with `metadata.evidence_ids`.

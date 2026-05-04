@@ -172,3 +172,15 @@ Example:
   ]
 }
 ```
+
+## Research/Evidence Flow
+
+Use this before `Generate Flow` when the dataset should be grounded in real-world material.
+
+1. Run `scripts/research.py` with the user request and coverage plan.
+2. Review `research_plan.json`, `sources.jsonl`, `evidence.jsonl`, and `coverage_report.json`.
+3. Draft canonical records from evidence chunks; do not copy raw chunks as assistant responses.
+4. Put provenance on each real-world record: `metadata.evidence_ids`, `metadata.reference_urls`, `metadata.source_domain`, `metadata.source_quality_score`, and `source_uri`.
+5. Import drafted records with `scripts/generate.py --dedup-threshold 0.85`.
+
+`collect.py` remains a low-level fetch/chunk fallback. Its output has `status: collected` and should be treated as raw source material, not a finished dataset.

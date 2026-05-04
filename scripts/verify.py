@@ -140,6 +140,8 @@ def heuristic_errors(record: dict[str, Any], args: argparse.Namespace, plan: dic
 
     instruction = str(record.get("instruction", "")).strip()
     metadata = dict(record.get("metadata") or {})
+    if str(record.get("status", "")).strip() == "collected":
+        errors.append("raw collected source chunk must be converted into a training example before verification")
     if len(instruction) < args.min_instruction_length:
         errors.append("instruction is too short for a stable training example")
     if metadata.get("rewrite_required"):
