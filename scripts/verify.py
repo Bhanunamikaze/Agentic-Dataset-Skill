@@ -186,6 +186,67 @@ def evidence_required(record: dict[str, Any], args: argparse.Namespace, plan: di
     return False
 
 
+def grounding_errors(
+    record: dict[str, Any],
+    args: argparse.Namespace,
+    plan: dict[str, Any],
+    evidence_map: dict[str, dict[str, Any]] | None,
+) -> list[str]:
+    evidence_map = evidence_map or {}
+    if not evidence_required(record, args, plan):
+        return []
+    ids = record_evidence_ids(record)
+    if not ids:
+        return ["real-world/grounded record is missing metadata.evidence_ids"]
+    if not evidence_map:
+        return []
+    missing = [item for item in ids if item not in evidence_map]
+    if missing:
+        return ["metadata.evidence_ids reference unknown evidence chunks: " + ", ".join(missing)]
+    return []
+
+
+
+def primary_response_text(record: dict[str, Any]) -> str:
+    response = record.get("response") or {}
+    if response.get("format") == "preference_pair":
+        return str(response.get("chosen") or response.get("rejected") or "")
+    return str(response.get("text", ""))
+
+
+def load_evidence_map(path: str | None) -> dict[str, dict[str, Any]]:
+    if not path:
+        return {}
+    evidence: dict[str, dict[str, Any]] = {}
+    for row in load_records(path):
+        evidence_id = row.get("evidence_id") or row.get("id")
+        if evidence_id:
+            evidence[str(evidence_id)] = dict(row)
+    return evidence
+
+
+def record_evidence_ids(record: dict[str, Any]) -> list[str]:
+    metadata = record.get("metadata") or {}
+    value = metadata.get("evidence_ids") or metadata.get("evidence_id") or []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    return []
+
+
+def evidence_required(record: dict[str, Any], args: argparse.Namespace, plan: dict[str, Any]) -> bool:
+    if getattr(args, "require_evidence", False):
+        return True
+    metadata = record.get("metadata") or {}
+    if metadata.get("source_origin") == "real_world":
+        grounding = plan.get("grounding") or {}
+        research = plan.get("research") or {}
+        if grounding.get("require_evidence_ids") or research.get("minimum_evidence_linked_share"):
+            return True
+    return False
+
+
 
 
 def infer_intent_type(record: dict[str, Any]) -> str:
