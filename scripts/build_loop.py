@@ -66,6 +66,10 @@ def parse_args() -> argparse.Namespace:
         help="Optional review file to promote heuristic passes to verified_pass during verify.",
     )
     parser.add_argument(
+        "--evidence-file",
+        help="Optional research evidence.jsonl file used by verify.py grounding checks.",
+    )
+    parser.add_argument(
         "--verify-min-instruction-length",
         type=int,
         help="Optional override for verify.py --min-instruction-length.",
@@ -228,6 +232,8 @@ def build_verify_args(args: argparse.Namespace, db_path: Path, source_run_id: st
     ]
     if args.review_file:
         command.extend(["--review-file", args.review_file])
+    if args.evidence_file:
+        command.extend(["--evidence-file", args.evidence_file])
     if args.plan_file:
         command.extend(["--plan-file", args.plan_file])
     if args.verify_min_instruction_length is not None:
@@ -335,6 +341,10 @@ def coverage_complete(coverage: dict[str, Any], *, plan: dict[str, Any]) -> bool
         and (
             not section_is_blocking(plan, "response_prefix")
             or not coverage.get("response_prefix_findings")
+        )
+        and (
+            not section_is_blocking(plan, "research")
+            or not coverage.get("research_findings")
         )
     )
 

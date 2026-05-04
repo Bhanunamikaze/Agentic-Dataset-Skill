@@ -5,6 +5,7 @@ import json
 import statistics
 import sys
 from collections import Counter
+from urllib.parse import urlparse
 from pathlib import Path
 from typing import Any
 
@@ -580,6 +581,85 @@ def compute_provenance(
     }, findings
 
 
+
+
+def source_domain_for_record(record: dict[str, Any]) -> str:
+    metadata = record.get("metadata") or {}
+    if metadata.get("source_domain"):
+        return str(metadata["source_domain"])
+    uri = str(record.get("source_uri") or "")
+    if uri.startswith(("http://", "https://")):
+        return urlparse(uri).netloc.lower().removeprefix("www.") or "__missing__"
+    if uri:
+        return "local"
+    return "__missing__"
+
+
+def record_evidence_ids(record: dict[str, Any]) -> list[str]:
+    metadata = record.get("metadata") or {}
+    value = metadata.get("evidence_ids") or metadata.get("evidence_id") or []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    return []
+
+
+def compute_research_coverage(
+    records: list[dict[str, Any]],
+    plan: dict[str, Any],
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    config = plan.get("research") or {}
+    if not isinstance(config, dict) or not config:
+        return None, []
+    total = len(records)
+    domains = Counter(source_domain_for_record(record) for record in records)
+    traceable = sum(1 for record in records if record.get("source_uri") or (record.get("metadata") or {}).get("reference_urls"))
+    evidence_linked = sum(1 for record in records if record_evidence_ids(record))
+    quality_values: list[float] = []
+    for record in records:
+        value = (record.get("metadata") or {}).get("source_quality_score")
+        try:
+            quality_values.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    findings: list[dict[str, Any]] = []
+    minimum_unique_domains = config.get("minimum_unique_domains")
+    if minimum_unique_domains not in (None, "") and len([d for d in domains if d != "__missing__"]) < int(minimum_unique_domains):
+        findings.append({"type": "unique_domains", "count": len(domains), "minimum": int(minimum_unique_domains)})
+    max_share_per_domain = config.get("max_share_per_domain")
+    if max_share_per_domain not in (None, "") and total:
+        max_share = float(max_share_per_domain)
+        for domain, count in domains.items():
+            if domain == "__missing__":
+                continue
+            share = count / total
+            if share > max_share:
+                findings.append({"type": "domain_concentration", "domain": domain, "count": count, "share": round(share, 4), "max_share": max_share})
+    min_traceable = config.get("minimum_traceable_record_share")
+    traceable_share = traceable / total if total else 0.0
+    if min_traceable not in (None, "") and traceable_share < float(min_traceable):
+        findings.append({"type": "traceability", "share": round(traceable_share, 4), "minimum_share": float(min_traceable)})
+    min_evidence = config.get("minimum_evidence_linked_share")
+    evidence_share = evidence_linked / total if total else 0.0
+    if min_evidence not in (None, "") and evidence_share < float(min_evidence):
+        findings.append({"type": "evidence_linkage", "share": round(evidence_share, 4), "minimum_share": float(min_evidence)})
+    minimum_quality = config.get("minimum_source_quality_score")
+    low_quality_count = 0
+    if minimum_quality not in (None, ""):
+        threshold = float(minimum_quality)
+        low_quality_count = sum(1 for value in quality_values if value < threshold)
+        if low_quality_count:
+            findings.append({"type": "source_quality", "count": low_quality_count, "minimum_score": threshold})
+    return {
+        "domain_counts": counter_to_dict(domains),
+        "unique_domains": len([d for d in domains if d != "__missing__"]),
+        "traceable_record_share": round(traceable_share, 4),
+        "evidence_linked_share": round(evidence_share, 4),
+        "records_with_quality_score": len(quality_values),
+        "low_quality_count": low_quality_count,
+    }, findings
+
 def build_recommendations(
     *,
     target_gap: int | None,
@@ -674,6 +754,7 @@ def main() -> None:
     response_length_summary, response_length_findings = compute_response_length(effective_records, plan)
     response_structure_summary, response_structure_findings = compute_response_structure(effective_records, plan)
     response_prefix_summary, response_prefix_findings = compute_response_prefix(effective_records, plan)
+    research_summary, research_findings = compute_research_coverage(effective_records, plan)
 
     target_effective_count = plan.get("target_effective_count")
     target_gap = None
@@ -702,6 +783,8 @@ def main() -> None:
         "response_structure_findings": response_structure_findings,
         "response_prefix": response_prefix_summary,
         "response_prefix_findings": response_prefix_findings,
+        "research": research_summary,
+        "research_findings": research_findings,
         "target_effective_count": (
             int(target_effective_count) if target_effective_count not in (None, "") else None
         ),

@@ -256,3 +256,15 @@ Users do not need to use explicit flags if they describe the task naturally.
 - `sub-skills/local-collector.md`
 - `resources/references/llm-audit-rubric.md`
 - `resources/references/export-schema-pattern.md`
+
+## Research/evidence route
+
+For internet-research dataset building, use `sub-skills/research-planner.md` before `seed-generator` whenever browsing/search is available or the user asks for real-world grounding.
+
+Recommended command:
+
+```bash
+python3 scripts/research.py --query "<topic>" --plan-file <coverage_plan.json> --tool-context <codex|claude|antigravity>
+```
+
+Then draft canonical records from `evidence.jsonl`. Real-world records should include `metadata.evidence_ids`, `metadata.reference_urls`, `metadata.source_domain`, `metadata.source_quality_score`, and `source_uri`. Raw `status: collected` chunks are not valid training examples.

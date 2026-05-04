@@ -65,6 +65,15 @@ def parse_args() -> argparse.Namespace:
         help="Optional coverage/quality plan used to enforce required fields and provenance rules.",
     )
     parser.add_argument(
+        "--evidence-file",
+        help="Optional research evidence.jsonl file used to validate metadata.evidence_ids.",
+    )
+    parser.add_argument(
+        "--require-evidence",
+        action="store_true",
+        help="Require evidence IDs for every record checked, regardless of source_origin.",
+    )
+    parser.add_argument(
         "--from-status",
         action="append",
         default=[],
@@ -135,7 +144,68 @@ def response_texts(record: dict[str, Any]) -> list[str]:
     return [str(response.get("text", ""))]
 
 
-def heuristic_errors(record: dict[str, Any], args: argparse.Namespace, plan: dict[str, Any] | None = None) -> list[str]:
+
+def primary_response_text(record: dict[str, Any]) -> str:
+    response = record.get("response") or {}
+    if response.get("format") == "preference_pair":
+        return str(response.get("chosen") or response.get("rejected") or "")
+    return str(response.get("text", ""))
+
+
+def load_evidence_map(path: str | None) -> dict[str, dict[str, Any]]:
+    if not path:
+        return {}
+    evidence: dict[str, dict[str, Any]] = {}
+    for row in load_records(path):
+        evidence_id = row.get("evidence_id") or row.get("id")
+        if evidence_id:
+            evidence[str(evidence_id)] = dict(row)
+    return evidence
+
+
+def record_evidence_ids(record: dict[str, Any]) -> list[str]:
+    metadata = record.get("metadata") or {}
+    value = metadata.get("evidence_ids") or metadata.get("evidence_id") or []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    return []
+
+
+def evidence_required(record: dict[str, Any], args: argparse.Namespace, plan: dict[str, Any]) -> bool:
+    if getattr(args, "require_evidence", False):
+        return True
+    metadata = record.get("metadata") or {}
+    if metadata.get("source_origin") == "real_world":
+        grounding = plan.get("grounding") or {}
+        research = plan.get("research") or {}
+        if grounding.get("require_evidence_ids") or research.get("minimum_evidence_linked_share"):
+            return True
+    return False
+
+
+def grounding_errors(
+    record: dict[str, Any],
+    args: argparse.Namespace,
+    plan: dict[str, Any],
+    evidence_map: dict[str, dict[str, Any]] | None,
+) -> list[str]:
+    evidence_map = evidence_map or {}
+    if not evidence_required(record, args, plan):
+        return []
+    ids = record_evidence_ids(record)
+    if not ids:
+        return ["real-world/grounded record is missing metadata.evidence_ids"]
+    if not evidence_map:
+        return []
+    missing = [item for item in ids if item not in evidence_map]
+    if missing:
+        return ["metadata.evidence_ids reference unknown evidence chunks: " + ", ".join(missing)]
+    return []
+
+
+def heuristic_errors(record: dict[str, Any], args: argparse.Namespace, plan: dict[str, Any] | None = None, evidence_map: dict[str, dict[str, Any]] | None = None) -> list[str]:
     errors = validate_record(record)
 
     instruction = str(record.get("instruction", "")).strip()
@@ -159,6 +229,7 @@ def heuristic_errors(record: dict[str, Any], args: argparse.Namespace, plan: dic
                 break
 
     plan = plan or {}
+    errors.extend(grounding_errors(record, args, plan, evidence_map))
     for field in plan_required_fields(plan):
         if is_missing_value(resolve_path(record, field)):
             errors.append(f"required field missing: {field}")
@@ -222,6 +293,9 @@ def apply_review(record: dict[str, Any], review: dict[str, Any] | None) -> tuple
     status = str(review.get("status", "")).strip().lower()
     score = review.get("score")
     reason = review.get("reason")
+    for flag in ("structural_pass", "instruction_following_pass", "grounding_pass", "format_pass"):
+        if flag in review and not bool(review.get(flag)):
+            return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or f"review flag failed: {flag}")
     if status == "pass":
         return "verified_pass", "pass", int(str(score)) if score not in (None, "") else None, str(reason or "")
     return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or "")
@@ -233,6 +307,7 @@ def main() -> None:
     db_path = initialize_database(args.db) if args.db else initialize_database()
     run_id = args.run_id or f"run_{uuid.uuid4().hex[:12]}"
     review_map = load_review_map(args.review_file)
+    evidence_map = load_evidence_map(args.evidence_file)
     allow_injections = resolve_allow_injections(
         args.allow_injections,
         args.user_query,
@@ -264,7 +339,7 @@ def main() -> None:
         }
 
         for record in records:
-            errors = heuristic_errors(record, args, plan)
+            errors = heuristic_errors(record, args, plan, evidence_map)
             result: dict[str, Any] = {
                 "id": record["id"],
                 "heuristic_errors": errors,

@@ -175,3 +175,15 @@ python3 scripts/generate.py --topic "<topic>" [--count <n>] --task-type <sft|dpo
 ```
 
 If `--count` is omitted, the placeholder target defaults to `500`.
+
+## Evidence-linked records
+
+When using `scripts/research.py`, draft records from `evidence.jsonl` and preserve traceability:
+
+- `metadata.evidence_ids`: evidence chunk IDs used to create the record
+- `metadata.reference_urls`: source URLs used
+- `metadata.source_domain`: domain or `local`
+- `metadata.source_quality_score`: source score from research
+- `source_uri`: primary source URL/path
+
+Do not place answer-bearing labels or mechanisms in model-visible `instruction` or `context`; keep them in metadata and use `model_visibility` during export.
