@@ -185,6 +185,20 @@ Use this before `Generate Flow` when the dataset should be grounded in real-worl
 
 `collect.py` remains a low-level fetch/chunk fallback. Its output has `status: collected` and should be treated as raw source material, not a finished dataset.
 
+## Advanced collection flags
+
+`scripts/research.py` accepts these optional flags for tighter control:
+
+- `--max-sources-per-domain N` (default 5) — caps sources per domain to prevent one site dominating evidence.
+- `--max-bytes N` (default 2 000 000) — aborts fetches beyond N bytes; returns partial content.
+- `--allowed-content-types TYPE ...` — restrict fetching to specific content-type prefixes.
+- `--per-domain-rate-limit SECONDS` — per-host rate limit (defaults to `--rate-limit`).
+
+`scripts/dedup.py` flags:
+
+- `--strategy {shingle,tfidf,minhash}` — near-duplicate detection algorithm. `minhash` uses a deterministic MinHash estimator.
+- `--code-aware` — normalizes Python code blocks (variable rename, comment strip) before dedup comparison.
+
 ## Optional GPT Researcher Backend
 
 The native research module is the default because the skill avoids mandatory external LLM-provider API calls. When a user explicitly wants autonomous deep research and has the required API keys, install optional dependencies and run:

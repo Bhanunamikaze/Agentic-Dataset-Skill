@@ -35,6 +35,7 @@ from scripts.utils.source_quality import (
 )
 from scripts.utils.web import (
     LocalFile,
+    RateLimiter,
     chunk_text,
     extract_text,
     fetch_url,
@@ -85,6 +86,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tool-context", default="generic")
     parser.add_argument("--output-dir", help="Defaults to workspace/research_<timestamp>.")
     parser.add_argument("--report", help="Optional JSON summary report path.")
+    parser.add_argument("--max-sources-per-domain", type=int, default=5, help="Maximum sources per domain during collection. 0 = no cap.")
+    parser.add_argument("--max-bytes", type=int, default=2_000_000, help="Max response bytes per fetch.")
+    parser.add_argument("--allowed-content-types", nargs="+", default=None, help="Allowed content-type prefixes. Default: html, xhtml, plain text.")
+    parser.add_argument("--per-domain-rate-limit", type=float, default=None, help="Seconds between fetches to the same domain. Defaults to --rate-limit.")
     return parser.parse_args()
 
 
@@ -147,20 +152,28 @@ def build_explicit_url_sources(args: argparse.Namespace, urls: list[str]) -> lis
     ]
 
 
-def fetch_source_text(source: dict[str, Any], args: argparse.Namespace) -> tuple[str, str, str | None]:
+def fetch_source_text(
+    source: dict[str, Any],
+    args: argparse.Namespace,
+    rate_limiter: "RateLimiter | None" = None,
+) -> tuple[str, str, str | None]:
     url = str(source.get("url") or "")
     if args.snippets_only:
         return str(source.get("title") or url), str(source.get("snippet") or ""), None
     if not is_url_fetchable(url, allow_private_network=args.allow_private_network):
         return str(source.get("title") or url), str(source.get("snippet") or ""), "url blocked by safety policy"
-    page = fetch_url(url, timeout=args.fetch_timeout)
-    if page.error or not page.html_content:
+    allowed_ct = tuple(args.allowed_content_types) if getattr(args, "allowed_content_types", None) else ("text/html", "application/xhtml+xml", "text/plain")
+    page = fetch_url(url, timeout=args.fetch_timeout, max_bytes=getattr(args, "max_bytes", 2_000_000), allowed_content_types=allowed_ct)
+    if page.error and not page.html_content:
         return str(source.get("title") or url), str(source.get("snippet") or ""), page.error or "empty response"
     extracted = extract_text(page.html_content, url)
     text = extracted.text or str(source.get("snippet") or "")
     title = extracted.title or str(source.get("title") or url)
-    time.sleep(args.rate_limit)
-    return title, text, None
+    if rate_limiter is not None:
+        rate_limiter.wait(url)
+    else:
+        time.sleep(args.rate_limit)
+    return title, text, page.error if page.error else None
 
 
 def evidence_from_source(source: dict[str, Any], text: str, args: argparse.Namespace) -> list[dict[str, Any]]:
@@ -176,6 +189,22 @@ def evidence_from_source(source: dict[str, Any], text: str, args: argparse.Names
                 "chunk": chunk[:240],
             },
         )
+        metadata: dict[str, Any] = {
+            "query": source.get("query"),
+            "research_subquery": source.get("research_subquery"),
+            "research_subquery_id": source.get("research_subquery_id"),
+            "domain": source.get("domain"),
+            "source_quality_score": source.get("source_quality_score"),
+            "source_type_detail": source.get("source_type_detail"),
+            "retrieved_at": source.get("retrieved_at"),
+        }
+        metadata["scenario_fingerprint"] = stable_id(
+            "scn",
+            {
+                "source_id": source["source_id"],
+                "research_subquery_id": source.get("research_subquery_id") or "unknown",
+            },
+        )
         evidence.append(
             {
                 "evidence_id": evidence_id,
@@ -184,15 +213,7 @@ def evidence_from_source(source: dict[str, Any], text: str, args: argparse.Names
                 "title": source.get("title") or "",
                 "text": chunk,
                 "chunk_index": index,
-                "metadata": {
-                    "query": source.get("query"),
-                    "research_subquery": source.get("research_subquery"),
-                    "research_subquery_id": source.get("research_subquery_id"),
-                    "domain": source.get("domain"),
-                    "source_quality_score": source.get("source_quality_score"),
-                    "source_type_detail": source.get("source_type_detail"),
-                    "retrieved_at": source.get("retrieved_at"),
-                },
+                "metadata": metadata,
             }
         )
     return evidence
@@ -251,6 +272,7 @@ def write_outputs(
     sources: list[dict[str, Any]],
     evidence: list[dict[str, Any]],
     args: argparse.Namespace,
+    domains_capped: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     plan_path = output_dir / "research_plan.json"
@@ -273,6 +295,8 @@ def write_outputs(
         "source_type_counts": distribution["source_type_counts"],
         "evidence_by_subquery": dict(sorted(evidence_by_subquery.items())),
         "generated_at": utc_now(),
+        "per_domain_cap": getattr(args, "max_sources_per_domain", 5),
+        "domains_capped": domains_capped or {},
     }
 
     write_json(plan_path, research_plan)
@@ -364,6 +388,24 @@ async def run_gpt_researcher_backend(args: argparse.Namespace, output_dir: Path)
     )
 
 
+def _apply_domain_cap(
+    sources: list[dict[str, Any]], cap: int
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    if not cap:  # 0 = disabled
+        return sources, {}
+    from collections import defaultdict
+    buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for s in sources:
+        buckets[domain_from_url(str(s.get("url") or ""))].append(s)
+    capped: dict[str, int] = {}
+    result: list[dict[str, Any]] = []
+    for domain, items in buckets.items():
+        if len(items) > cap:
+            capped[domain] = len(items)
+        result.extend(items[:cap])
+    return result, capped
+
+
 def run_native_backend(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     plan = load_json_object(args.plan_file)
     taxonomy = load_json_object(args.taxonomy_file)
@@ -383,9 +425,14 @@ def run_native_backend(args: argparse.Namespace, output_dir: Path) -> dict[str, 
         sources.extend(build_explicit_url_sources(args, explicit_urls))
     sources = dedupe_sources(sources)[: args.max_sources]
 
+    sources, domains_capped = _apply_domain_cap(sources, getattr(args, "max_sources_per_domain", 5))
+
+    per_domain_rate = args.per_domain_rate_limit if getattr(args, "per_domain_rate_limit", None) is not None else args.rate_limit
+    rate_limiter = RateLimiter(per_domain_seconds=per_domain_rate)
+
     fetched_sources: list[dict[str, Any]] = []
     for source in sources:
-        title, text, error = fetch_source_text(source, args)
+        title, text, error = fetch_source_text(source, args, rate_limiter=rate_limiter)
         source["title"] = title or source.get("title") or source.get("url")
         source["domain"] = domain_from_url(str(source.get("url") or ""))
         source["source_type_detail"] = classify_source_type(str(source.get("url") or ""), title, text)
@@ -413,6 +460,7 @@ def run_native_backend(args: argparse.Namespace, output_dir: Path) -> dict[str, 
         sources=fetched_sources,
         evidence=evidence,
         args=args,
+        domains_capped=domains_capped,
     )
 
 

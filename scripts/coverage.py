@@ -660,6 +660,85 @@ def compute_research_coverage(
         "low_quality_count": low_quality_count,
     }, findings
 
+def float_percentile(values: list[float], fraction: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    index = min(max(int(round((len(ordered) - 1) * fraction)), 0), len(ordered) - 1)
+    return float(ordered[index])
+
+
+def compute_dpo_coverage(
+    records: list[dict[str, Any]],
+    plan: dict[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    pairs = [
+        record for record in records
+        if (record.get("response") or {}).get("format") == "preference_pair"
+    ]
+    pair_count = len(pairs)
+
+    chosen_lengths: list[int] = []
+    rejected_lengths: list[int] = []
+    ratios: list[float] = []
+    for record in pairs:
+        response = record.get("response") or {}
+        lc = len(str(response.get("chosen") or ""))
+        lr = len(str(response.get("rejected") or ""))
+        chosen_lengths.append(lc)
+        rejected_lengths.append(lr)
+        ratio = max(lc, lr) / max(1, min(lc, lr))
+        ratios.append(ratio)
+
+    mean_chosen_length = (sum(chosen_lengths) / pair_count) if pair_count else 0.0
+    mean_rejected_length = (sum(rejected_lengths) / pair_count) if pair_count else 0.0
+    length_ratio_p95 = float_percentile(ratios, 0.95) if ratios else 0.0
+
+    dpo_delta_counts: Counter[str] = Counter()
+    for record in pairs:
+        delta = (record.get("metadata") or {}).get("dpo_delta")
+        key = str(delta) if delta is not None else "__missing__"
+        dpo_delta_counts[key] += 1
+
+    findings: list[dict[str, Any]] = []
+    dpo_config = plan.get("dpo") or {}
+
+    min_pair_count = dpo_config.get("min_pair_count")
+    if min_pair_count not in (None, "") and pair_count < int(min_pair_count):
+        findings.append({"type": "dpo_pair_count", "count": pair_count, "minimum": int(min_pair_count)})
+
+    max_mean_length_ratio = dpo_config.get("max_mean_length_ratio", 3.0)
+    if max_mean_length_ratio not in (None, "") and mean_chosen_length > 0 and mean_rejected_length > 0:
+        threshold = float(max_mean_length_ratio)
+        actual_ratio = max(mean_chosen_length, mean_rejected_length) / min(mean_chosen_length, mean_rejected_length)
+        if actual_ratio > threshold:
+            findings.append({
+                "type": "dpo_length_skew",
+                "ratio": round(actual_ratio, 4),
+                "max_mean_length_ratio": threshold,
+            })
+
+    max_share_per_delta = dpo_config.get("max_share_per_delta")
+    if max_share_per_delta not in (None, "") and pair_count > 0:
+        threshold = float(max_share_per_delta)
+        for delta_value, count in dpo_delta_counts.items():
+            share = count / pair_count
+            if share > threshold:
+                findings.append({
+                    "type": "dpo_delta_concentration",
+                    "delta": delta_value,
+                    "share": round(share, 4),
+                })
+
+    return {
+        "pair_count": pair_count,
+        "mean_chosen_length": round(mean_chosen_length, 4),
+        "mean_rejected_length": round(mean_rejected_length, 4),
+        "length_ratio_p95": round(length_ratio_p95, 4),
+        "dpo_delta_counts": counter_to_dict(dpo_delta_counts),
+    }, findings
+
+
 def build_recommendations(
     *,
     target_gap: int | None,
@@ -755,6 +834,7 @@ def main() -> None:
     response_structure_summary, response_structure_findings = compute_response_structure(effective_records, plan)
     response_prefix_summary, response_prefix_findings = compute_response_prefix(effective_records, plan)
     research_summary, research_findings = compute_research_coverage(effective_records, plan)
+    dpo_summary, dpo_findings = compute_dpo_coverage(effective_records, plan)
 
     target_effective_count = plan.get("target_effective_count")
     target_gap = None
@@ -785,6 +865,8 @@ def main() -> None:
         "response_prefix_findings": response_prefix_findings,
         "research": research_summary,
         "research_findings": research_findings,
+        "dpo": dpo_summary,
+        "dpo_findings": dpo_findings,
         "target_effective_count": (
             int(target_effective_count) if target_effective_count not in (None, "") else None
         ),

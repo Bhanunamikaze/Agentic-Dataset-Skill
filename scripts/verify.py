@@ -424,30 +424,59 @@ def load_records_for_verification(
     return [row_to_record(dict(row)) for row in rows[: args.limit]]
 
 
-def apply_review(record: dict[str, Any], review: dict[str, Any] | None) -> tuple[str, str, int | None, str | None]:
+def apply_review(record: dict[str, Any], review: dict[str, Any] | None, plan: dict[str, Any] | None = None) -> tuple[str, str, int | None, str | None]:
     if not review:
         return "judge_pending", "pending", None, None
 
+    plan = plan or {}
     status = str(review.get("status", "")).strip().lower()
     score = review.get("score")
     reason = review.get("reason")
+    int_score = int(str(score)) if score not in (None, "") else None
+
+    safety_notes = review.get("safety_notes")
+    if safety_notes:
+        record["judge_safety_notes"] = str(safety_notes)
+
+    capability_delta_score = review.get("capability_delta_score")
+    if capability_delta_score is not None:
+        record["judge_capability_delta"] = capability_delta_score
+
     for flag in ("structural_pass", "instruction_following_pass", "grounding_pass", "format_pass"):
         if flag in review and not bool(review.get(flag)):
-            return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or f"review flag failed: {flag}")
+            return "verified_fail", "fail", int_score, str(reason or f"review flag failed: {flag}")
+
     unsupported_claims = review.get("unsupported_claims") or []
     if unsupported_claims:
-        return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or "unsupported claims present")
+        return "verified_fail", "fail", int_score, str(reason or "unsupported claims present")
+
     capability_delta = review.get("capability_delta_score")
     min_delta = review.get("min_capability_delta_score")
     if capability_delta not in (None, "") and min_delta not in (None, ""):
         try:
             if int(str(capability_delta)) < int(str(min_delta)):
-                return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or "capability delta below review minimum")
+                return "verified_fail", "fail", int_score, str(reason or "capability delta below review minimum")
         except ValueError:
-            return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or "invalid capability_delta_score")
+            return "verified_fail", "fail", int_score, str(reason or "invalid capability_delta_score")
+
+    review_requirements = plan.get("review_requirements") or {}
+    min_cap_delta = review_requirements.get("min_capability_delta_score")
+    if min_cap_delta not in (None, "") and capability_delta_score is not None:
+        try:
+            if int(str(capability_delta_score)) < int(str(min_cap_delta)):
+                return "verified_fail", "fail", int_score, "capability_delta_score below minimum"
+        except ValueError:
+            pass
+
+    require_grounding = review_requirements.get("require_grounding_pass")
+    if require_grounding:
+        grounding_val = review.get("grounding_pass")
+        if grounding_val is False or grounding_val is None:
+            return "verified_fail", "fail", int_score, "grounding_pass required but not present or failed"
+
     if status == "pass":
-        return "verified_pass", "pass", int(str(score)) if score not in (None, "") else None, str(reason or "")
-    return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or "")
+        return "verified_pass", "pass", int_score, str(reason or "")
+    return "verified_fail", "fail", int_score, str(reason or "")
 
 
 def main() -> None:
@@ -502,6 +531,7 @@ def main() -> None:
                 status, pipeline_status, score, reason = apply_review(
                     record,
                     review_map.get(record["id"]),
+                    plan,
                 )
                 record["status"] = status
                 record["pipeline_status"] = pipeline_status

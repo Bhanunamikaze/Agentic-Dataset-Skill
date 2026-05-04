@@ -346,6 +346,14 @@ def coverage_complete(coverage: dict[str, Any], *, plan: dict[str, Any]) -> bool
             not section_is_blocking(plan, "research")
             or not coverage.get("research_findings")
         )
+        and (
+            not section_is_blocking(plan, "dpo")
+            or not coverage.get("dpo_findings")
+        )
+        and (
+            not section_is_blocking(plan, "review_requirements")
+            or not coverage.get("review_requirements_findings")
+        )
     )
 
 

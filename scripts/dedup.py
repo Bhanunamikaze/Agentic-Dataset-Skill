@@ -18,7 +18,7 @@ from scripts.utils.db import (
     upsert_run,
 )
 from scripts.utils.files import write_json
-from scripts.utils.similarity import find_duplicates
+from scripts.utils.similarity import find_duplicates, normalize_code_text
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,6 +70,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional path to the SQLite database. Defaults to workspace/run_state.sqlite.",
     )
     parser.add_argument("--report", help="Optional path to write a JSON summary report.")
+    parser.add_argument(
+        "--code-aware",
+        action="store_true",
+        default=False,
+        help="Normalize Python code blocks before dedup (variable rename + comment strip).",
+    )
     return parser.parse_args()
 
 
@@ -97,10 +103,16 @@ def main() -> None:
         rows = rows[: args.limit]
         records = [row_to_record(dict(row)) for row in rows]
 
+        if args.code_aware:
+            base_text_fn = record_text
+            text_fn = lambda r: normalize_code_text(base_text_fn(r))
+        else:
+            text_fn = record_text
+
         kept_ids, duplicate_details = find_duplicates(
             records,
             threshold=args.threshold,
-            text_fn=record_text,
+            text_fn=text_fn,
             strategy=args.strategy,
         )
         duplicate_ids = {item["duplicate_id"] for item in duplicate_details}
@@ -134,6 +146,7 @@ def main() -> None:
         "kept_count": len(kept_ids),
         "duplicate_count": len(duplicate_details),
         "strategy": args.strategy,
+        "code_aware": args.code_aware,
         "duplicates": duplicate_details,
     }
     if args.report:

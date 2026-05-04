@@ -186,4 +186,6 @@ When using `scripts/research.py`, draft records from `evidence.jsonl` and preser
 - `metadata.source_quality_score`: source score from research
 - `source_uri`: primary source URL/path
 
+When drafting records from `evidence.jsonl`, copy `metadata.scenario_fingerprint` from the evidence row into the canonical record's metadata. This prevents split leakage by ensuring all records derived from the same evidence cluster receive the same cluster key, so they land together in the same train or test split rather than being scattered across both.
+
 Do not place answer-bearing labels or mechanisms in model-visible `instruction` or `context`; keep them in metadata and use `model_visibility` during export.

@@ -169,6 +169,28 @@ def synthetic_fingerprint(records: list[dict[str, Any]]) -> tuple[dict[str, Any]
     return {"synthetic_score": score, "repeated_opening_share": round(repeated_share, 4), "polished_instruction_share": round(polished_share, 4), "response_length_cv": round(cv, 4)}, findings
 
 
+def cluster_fallback_findings(records: list[dict[str, Any]]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Flag when too many records fall back to instruction-word cluster keys."""
+    from scripts.export import get_cluster_key
+    findings: list[dict[str, Any]] = []
+    if not records:
+        return {"fallback_count": 0, "fallback_share": 0.0}, findings
+    fallback_count = sum(1 for r in records if get_cluster_key(r).startswith("fallback:"))
+    fallback_share = fallback_count / len(records)
+    if fallback_share > 0.25:
+        add_finding(
+            findings,
+            "Medium",
+            "Cluster fallback overuse",
+            f"{fallback_share:.1%} of records use fallback cluster keys. "
+            "Add metadata.scenario_fingerprint, metadata.topic, or metadata.evidence_ids to reduce split leakage risk.",
+        )
+    return {
+        "fallback_count": fallback_count,
+        "fallback_share": round(fallback_share, 4),
+    }, findings
+
+
 def write_markdown(path: str, summary: dict[str, Any]) -> None:
     lines = [
         "# Dataset Audit Report",
@@ -204,6 +226,7 @@ def main() -> None:
         ("sources", source_findings),
         ("labels", label_balance),
         ("synthetic", synthetic_fingerprint),
+        ("cluster_keys", cluster_fallback_findings),
     ):
         result, result_findings = fn(records)
         metrics[name] = result

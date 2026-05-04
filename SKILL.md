@@ -268,3 +268,7 @@ python3 scripts/research.py --query "<topic>" --plan-file <coverage_plan.json> -
 ```
 
 Then draft canonical records from `evidence.jsonl`. Real-world records should include `metadata.evidence_ids`, `metadata.reference_urls`, `metadata.source_domain`, `metadata.source_quality_score`, and `source_uri`. Raw `status: collected` chunks are not valid training examples.
+
+- DPO plan keys (`dpo.min_pair_count`, `dpo.forbid_refusal_in_rejected`, etc.) can be added to the coverage plan to enforce contrastive quality gates.
+- `review_requirements.min_capability_delta_score` and `review_requirements.require_grounding_pass` enforce structured review thresholds during verification.
+- Records drafted from `evidence.jsonl` should copy `metadata.scenario_fingerprint` to prevent train/test split leakage.
