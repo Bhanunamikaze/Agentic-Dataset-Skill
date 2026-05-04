@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sys
@@ -185,6 +186,74 @@ def evidence_required(record: dict[str, Any], args: argparse.Namespace, plan: di
     return False
 
 
+
+
+def infer_intent_type(record: dict[str, Any]) -> str:
+    metadata = record.get("metadata") or {}
+    combined = " ".join(
+        str(metadata.get(key, "")) for key in ("intent", "task_type", "response_shape", "label")
+    ).lower()
+    instruction = str(record.get("instruction") or "").lower()
+    if "classification" in combined or metadata.get("label"):
+        return "classification"
+    if "code_review" in combined or "review" in instruction and "code" in instruction:
+        return "code_review"
+    if "code" in combined or "write" in instruction and ("function" in instruction or "script" in instruction):
+        return "code_generation"
+    if "regex" in combined or "regex" in instruction:
+        return "regex"
+    if "explain" in instruction or "tutorial" in combined:
+        return "explanation"
+    return "general"
+
+
+def task_relative_errors(record: dict[str, Any], plan: dict[str, Any]) -> list[str]:
+    config = plan.get("quality_filter") or {}
+    if not isinstance(config, dict) or not config.get("task_relative_minimums"):
+        return []
+    text = primary_response_text(record).strip()
+    words = [item for item in re.findall(r"\w+", text) if item]
+    intent = infer_intent_type(record)
+    if intent == "classification":
+        return []
+    if intent == "regex" and len(text) < 5:
+        return ["regex/one-liner response is too short"]
+    if intent == "code_review" and len(words) < 50:
+        return ["code-review response is below task-relative minimum of 50 words"]
+    if intent == "explanation" and len(words) < 80:
+        return ["explanation/tutorial response is below task-relative minimum of 80 words"]
+    if intent == "code_generation" and text.count("\n") < 4 and len(words) < 25:
+        return ["code-generation response is too short for the inferred task"]
+    return []
+
+
+def _python_blocks(text: str) -> list[str]:
+    pattern = re.compile(r"```(?:python|py)\s*(.*?)```", re.DOTALL | re.IGNORECASE)
+    return [match.group(1).strip() for match in pattern.finditer(text)]
+
+
+def syntax_errors(record: dict[str, Any], plan: dict[str, Any]) -> list[str]:
+    config = plan.get("syntax_checks") or {}
+    if not isinstance(config, dict) or not config:
+        return []
+    errors: list[str] = []
+    text = primary_response_text(record).strip()
+    instruction = str(record.get("instruction") or "").lower()
+    metadata = record.get("metadata") or {}
+    if config.get("json") and ("json" in instruction or metadata.get("response_format") == "json"):
+        try:
+            json.loads(text)
+        except json.JSONDecodeError as exc:
+            errors.append(f"response is not valid JSON: {exc.msg}")
+    if config.get("python"):
+        blocks = _python_blocks(text)
+        for index, block in enumerate(blocks, start=1):
+            try:
+                ast.parse(block)
+            except SyntaxError as exc:
+                errors.append(f"python code block {index} has syntax error: {exc.msg}")
+    return errors
+
 def grounding_errors(
     record: dict[str, Any],
     args: argparse.Namespace,
@@ -230,6 +299,8 @@ def heuristic_errors(record: dict[str, Any], args: argparse.Namespace, plan: dic
 
     plan = plan or {}
     errors.extend(grounding_errors(record, args, plan, evidence_map))
+    errors.extend(task_relative_errors(record, plan))
+    errors.extend(syntax_errors(record, plan))
     for field in plan_required_fields(plan):
         if is_missing_value(resolve_path(record, field)):
             errors.append(f"required field missing: {field}")

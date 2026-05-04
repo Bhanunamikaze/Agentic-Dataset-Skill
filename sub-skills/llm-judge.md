@@ -101,3 +101,17 @@ python3 scripts/verify.py --from-status raw_generated --review-file <review.json
 ```
 
 Reference rubric: `resources/references/llm-audit-rubric.md`
+
+## Extended review fields
+
+The legacy review format (`id`, `score`, `reason`, `status`) remains valid. For production runs, prefer extended fields so deterministic verification can enforce each pass separately:
+
+- `structural_pass`: boolean
+- `instruction_following_pass`: boolean
+- `grounding_pass`: boolean
+- `format_pass`: boolean
+- `capability_delta_score`: integer 1–5
+- `unsupported_claims`: list of short strings
+- `evidence_ids_checked`: list of evidence IDs
+
+If any provided pass flag is false, `verify.py` treats the review as a fail even when `status` was accidentally set to `pass`.
