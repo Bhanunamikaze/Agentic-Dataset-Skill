@@ -92,6 +92,12 @@ def parse_args() -> argparse.Namespace:
         help="Reject exact and semantic near-duplicates during import using this similarity threshold.",
     )
     parser.add_argument(
+        "--dedup-strategy",
+        choices=("shingle", "tfidf", "minhash", "code"),
+        default="shingle",
+        help="Import-time dedup strategy. Use code for code-heavy corpora.",
+    )
+    parser.add_argument(
         "--compare-status",
         action="append",
         default=[],
@@ -215,6 +221,7 @@ def main() -> None:
                     record_id=str(record["id"]),
                     text=record_text(record),
                     threshold=args.dedup_threshold,
+                    strategy=args.dedup_strategy,
                 )
                 if match:
                     record["status"] = "deduped"

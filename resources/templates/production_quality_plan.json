@@ -1,0 +1,26 @@
+{
+  "quality_filter": {"task_relative_minimums": true},
+  "syntax_checks": {"python": true, "json": true},
+  "code_quality": {
+    "enabled": true,
+    "python_ast": true,
+    "json": true,
+    "javascript_balance": true,
+    "shell_balance": true,
+    "sql_balance": true
+  },
+  "dpo_audit": {
+    "enabled": true,
+    "require_delta": true,
+    "min_rejected_chars": 40,
+    "max_length_ratio": 3.0
+  },
+  "benchmark_contamination": {
+    "enabled": true,
+    "blocking": true
+  },
+  "grounding": {
+    "require_evidence_ids": true,
+    "minimum_response_evidence_overlap": 0.08
+  }
+}

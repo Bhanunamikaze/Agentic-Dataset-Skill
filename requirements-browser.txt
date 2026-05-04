@@ -1,0 +1,2 @@
+# Optional JavaScript-rendered page collection
+playwright

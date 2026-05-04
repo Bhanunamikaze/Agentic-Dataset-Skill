@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--strategy",
-        choices=("shingle", "tfidf", "minhash"),
+        choices=("shingle", "tfidf", "minhash", "code"),
         default="shingle",
         help="Near-duplicate strategy. minhash currently uses deterministic shingle Jaccard fallback.",
     )

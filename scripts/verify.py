@@ -32,6 +32,9 @@ from scripts.utils.db import (
 from scripts.utils.files import load_records, write_json
 from scripts.utils.security import resolve_allow_injections
 from scripts.utils.schema import validate_record
+from scripts.utils.benchmark_guard import benchmark_contamination_errors
+from scripts.utils.code_quality import code_quality_errors
+from scripts.utils.dpo_quality import dpo_pair_errors
 
 REFUSAL_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
@@ -362,6 +365,9 @@ def heuristic_errors(record: dict[str, Any], args: argparse.Namespace, plan: dic
     errors.extend(grounding_errors(record, args, plan, evidence_map))
     errors.extend(task_relative_errors(record, plan))
     errors.extend(syntax_errors(record, plan))
+    errors.extend(code_quality_errors(record, plan))
+    errors.extend(dpo_pair_errors(record, plan))
+    errors.extend(benchmark_contamination_errors(record, plan))
     for field in plan_required_fields(plan):
         if is_missing_value(resolve_path(record, field)):
             errors.append(f"required field missing: {field}")
@@ -428,6 +434,17 @@ def apply_review(record: dict[str, Any], review: dict[str, Any] | None) -> tuple
     for flag in ("structural_pass", "instruction_following_pass", "grounding_pass", "format_pass"):
         if flag in review and not bool(review.get(flag)):
             return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or f"review flag failed: {flag}")
+    unsupported_claims = review.get("unsupported_claims") or []
+    if unsupported_claims:
+        return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or "unsupported claims present")
+    capability_delta = review.get("capability_delta_score")
+    min_delta = review.get("min_capability_delta_score")
+    if capability_delta not in (None, "") and min_delta not in (None, ""):
+        try:
+            if int(str(capability_delta)) < int(str(min_delta)):
+                return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or "capability delta below review minimum")
+        except ValueError:
+            return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or "invalid capability_delta_score")
     if status == "pass":
         return "verified_pass", "pass", int(str(score)) if score not in (None, "") else None, str(reason or "")
     return "verified_fail", "fail", int(str(score)) if score not in (None, "") else None, str(reason or "")

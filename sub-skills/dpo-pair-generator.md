@@ -72,3 +72,7 @@ Each DPO record must use `response.format: "preference_pair"` with:
 ```
 
 Include a `metadata.dpo_delta` field briefly describing the exact flaw in the rejected response. This aids later auditing.
+
+## Deterministic DPO audit gate
+
+For production DPO runs, enable `dpo_audit.enabled` in the plan. This catches empty/identical chosen-rejected pairs, missing `metadata.dpo_delta`, refusal-like rejected responses, weak hard negatives, and excessive length skew.

@@ -319,3 +319,15 @@ python3 scripts/research.py --query "<topic>" --plan-file workspace/coverage_pla
 This writes a research workspace containing `research_plan.json`, `sources.jsonl`, `evidence.jsonl`, and `coverage_report.json`. Draft records from `evidence.jsonl` and keep provenance in `metadata.evidence_ids`, `metadata.reference_urls`, `metadata.source_domain`, and `source_uri`.
 
 An optional GPT Researcher backend is available through `requirements-research.txt`, but the native backend remains the default.
+
+## Production Quality Gates
+
+Production runs can enable stricter deterministic gates for code quality, DPO pair validity, benchmark contamination, and review-batch validation.
+
+Useful commands:
+
+```bash
+python3 scripts/review_batch.py --records workspace/canonical_train.jsonl --prompt-output workspace/review_prompt.txt
+python3 scripts/dedup.py --from-status verified_pass --strategy code --threshold 0.92
+python3 scripts/quality_report.py --input workspace/canonical_train.jsonl --report workspace/QUALITY_REPORT.json
+```

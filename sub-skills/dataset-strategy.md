@@ -95,3 +95,7 @@ Always state the intended example count explicitly. Do not leave it implicit.
 - Internet-research collection -> `internet_research`
 
 Always state the chosen `source_type` explicitly before moving into the script layer.
+
+## Production contamination and code-quality gates
+
+For code, DPO, benchmark-like, or high-stakes datasets, add `code_quality`, `dpo_audit`, `benchmark_contamination`, and `grounding` sections to the plan. Start from `resources/templates/production_quality_plan.json`.
