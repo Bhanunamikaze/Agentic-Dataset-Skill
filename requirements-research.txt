@@ -1,0 +1,3 @@
+# Optional deep-research backend dependencies
+# Install only when using scripts/research.py --backend gpt_researcher
+gpt-researcher

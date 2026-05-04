@@ -307,3 +307,15 @@ Why `500`:
 
 - Add a standalone `dataset card` command if users want card generation decoupled from export.
 - Move toward stronger artifact versioning and per-run workspace layout once larger datasets become a primary use case.
+
+## Research/Evidence Pipeline
+
+For research-grounded datasets, use the evidence pipeline before drafting records:
+
+```bash
+python3 scripts/research.py --query "<topic>" --plan-file workspace/coverage_plan.json
+```
+
+This writes a research workspace containing `research_plan.json`, `sources.jsonl`, `evidence.jsonl`, and `coverage_report.json`. Draft records from `evidence.jsonl` and keep provenance in `metadata.evidence_ids`, `metadata.reference_urls`, `metadata.source_domain`, and `source_uri`.
+
+An optional GPT Researcher backend is available through `requirements-research.txt`, but the native backend remains the default.

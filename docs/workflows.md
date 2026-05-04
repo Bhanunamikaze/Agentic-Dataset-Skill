@@ -184,3 +184,14 @@ Use this before `Generate Flow` when the dataset should be grounded in real-worl
 5. Import drafted records with `scripts/generate.py --dedup-threshold 0.85`.
 
 `collect.py` remains a low-level fetch/chunk fallback. Its output has `status: collected` and should be treated as raw source material, not a finished dataset.
+
+## Optional GPT Researcher Backend
+
+The native research module is the default because the skill avoids mandatory external LLM-provider API calls. When a user explicitly wants autonomous deep research and has the required API keys, install optional dependencies and run:
+
+```bash
+python3 -m pip install -r requirements-research.txt
+python3 scripts/research.py --backend gpt_researcher --query "<topic>"
+```
+
+The adapter converts GPT Researcher context/sources into this repo's `sources.jsonl` and `evidence.jsonl` artifacts so downstream generation, verification, coverage, audit, and export stay unchanged.
