@@ -526,3 +526,70 @@ def chunk_text(
             final.append(" ".join(sub))
 
     return [c for c in final if c.strip()]
+
+
+# ---------------------------------------------------------------------------
+# Research-module helpers
+# ---------------------------------------------------------------------------
+
+def is_url_fetchable(url: str, *, allow_private_network: bool = False) -> bool:
+    """Return whether a URL is safe for default research fetching."""
+    parsed = urllib.parse.urlsplit(str(url or ""))
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    if allow_private_network:
+        return True
+    if host in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}:
+        return False
+    try:
+        import ipaddress
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
+            return False
+    except ValueError:
+        pass
+    return True
+
+
+def search_web_all_backends(
+    query: str,
+    *,
+    max_results: int = 10,
+    rate_limit_seconds: float = 1.0,
+) -> list[SearchResult]:
+    """Search all available backends and deduplicate results by URL.
+
+    Unlike search_web(), this does not stop at the first backend. It is intended
+    for research/evidence collection where domain diversity matters more than a
+    single fallback chain result.
+    """
+    all_results: list[SearchResult] = []
+    for backend in (
+        _search_serpapi,
+        _search_bing,
+        _search_google_cse,
+        _search_duckduckgo_lib,
+        _search_duckduckgo_html,
+    ):
+        try:
+            results = backend(query, max_results)
+        except Exception:
+            results = []
+        if results:
+            all_results.extend(results)
+            time.sleep(rate_limit_seconds)
+
+    seen: set[str] = set()
+    unique: list[SearchResult] = []
+    for result in all_results:
+        url = str(result.url or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        unique.append(result)
+        if len(unique) >= max_results:
+            break
+    return unique
