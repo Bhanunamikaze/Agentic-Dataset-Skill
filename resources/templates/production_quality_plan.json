@@ -1,5 +1,5 @@
 {
-  "quality_filter": {"task_relative_minimums": true},
+  "quality_filter": {"task_relative_minimums": true, "anti_trope": true},
   "syntax_checks": {"python": true, "json": true},
   "code_quality": {
     "enabled": true,
@@ -12,6 +12,7 @@
   "dpo_audit": {
     "enabled": true,
     "require_delta": true,
+    "min_chosen_chars": 40,
     "min_rejected_chars": 40,
     "max_length_ratio": 3.0
   },
@@ -21,6 +22,13 @@
   },
   "grounding": {
     "require_evidence_ids": true,
-    "minimum_response_evidence_overlap": 0.08
+    "minimum_response_evidence_overlap": 0.20
+  },
+  "provenance": {
+    "field": "metadata.source_origin",
+    "real_world_values": ["real_world"],
+    "minimum_real_world_share": 0.6,
+    "reference_fields": ["metadata.reference_urls", "source_uri"],
+    "blocking": false
   }
 }

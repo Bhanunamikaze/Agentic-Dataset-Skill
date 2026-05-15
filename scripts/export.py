@@ -21,6 +21,7 @@ from scripts.utils.visibility import sanitize_records_for_model_visibility
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_FLAT_SCHEMA = ROOT_DIR / "resources" / "target-schemas" / "csv_columns.json"
+DEFAULT_OUTPUT_DIR = ROOT_DIR / "workspace"
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,8 +50,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42, help="Shuffle seed for dataset splitting.")
     parser.add_argument(
         "--output-dir",
-        default="workspace",
-        help="Directory for exported files and generated data card.",
+        default=str(DEFAULT_OUTPUT_DIR),
+        help=(
+            "Directory for exported files and generated data card. Defaults to "
+            "the same 'workspace/' directory the SQLite state lives in, so the "
+            "default works whether you run from a dev checkout or an installed "
+            "skill copy."
+        ),
     )
     parser.add_argument(
         "--schema-file",

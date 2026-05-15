@@ -9,6 +9,8 @@ from pathlib import Path
 if __name__ == "__main__" or not getattr(sys.modules.get(__name__, None), "__package__", None):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from typing import Any, Mapping
+
 from scripts.utils.canonical import record_text, row_to_record
 from scripts.utils.db import (
     fetch_records_by_status,
@@ -76,7 +78,39 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Normalize Python code blocks before dedup (variable rename + comment strip).",
     )
+    parser.add_argument(
+        "--dedup-on",
+        choices=("record", "instruction", "response"),
+        default="record",
+        help=(
+            "Which part of the canonical record to fingerprint. 'record' (default) "
+            "uses instruction+context+response; 'instruction' catches same-question "
+            "/ conflicting-answer duplicates; 'response' catches reused answers "
+            "across different prompts."
+        ),
+    )
     return parser.parse_args()
+
+
+def _instruction_text(record: Mapping[str, Any]) -> str:
+    return str(record.get("instruction") or "")
+
+
+def _response_only_text(record: Mapping[str, Any]) -> str:
+    response = record.get("response") or {}
+    if isinstance(response, Mapping) and response.get("format") == "preference_pair":
+        return "\n".join([str(response.get("chosen") or ""), str(response.get("rejected") or "")])
+    if isinstance(response, Mapping):
+        return str(response.get("text") or "")
+    return str(response or "")
+
+
+def _select_text_fn(dedup_on: str):
+    if dedup_on == "instruction":
+        return _instruction_text
+    if dedup_on == "response":
+        return _response_only_text
+    return record_text
 
 
 def main() -> None:
@@ -103,11 +137,11 @@ def main() -> None:
         rows = rows[: args.limit]
         records = [row_to_record(dict(row)) for row in rows]
 
+        base_text_fn = _select_text_fn(args.dedup_on)
         if args.code_aware:
-            base_text_fn = record_text
             text_fn = lambda r: normalize_code_text(base_text_fn(r))
         else:
-            text_fn = record_text
+            text_fn = base_text_fn
 
         kept_ids, duplicate_details = find_duplicates(
             records,
@@ -147,6 +181,7 @@ def main() -> None:
         "duplicate_count": len(duplicate_details),
         "strategy": args.strategy,
         "code_aware": args.code_aware,
+        "dedup_on": args.dedup_on,
         "duplicates": duplicate_details,
     }
     if args.report:

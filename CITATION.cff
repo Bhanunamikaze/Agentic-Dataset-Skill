@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this skill package in research, audits, or derivative tooling, please cite it."
+title: "AI Dataset Generator Skill"
+type: software
+authors:
+  - family-names: "Bhanunamikaze"
+repository-code: "https://github.com/Bhanunamikaze/ai-dataset-generator"
+url: "https://github.com/Bhanunamikaze/ai-dataset-generator"
+license: "MIT"
+date-released: "2026-05-15"
+abstract: "LLM-first dataset generation skill package for agent IDEs, with sub-skills, references, agents, and validation scripts for SFT and DPO dataset workflows."
+keywords:
+  - dataset
+  - llm
+  - fine-tuning
+  - sft
+  - dpo
+  - claude-code
+  - codex
+  - antigravity

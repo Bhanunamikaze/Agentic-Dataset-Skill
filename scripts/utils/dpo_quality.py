@@ -20,6 +20,9 @@ def dpo_pair_errors(record: Mapping[str, Any], plan: Mapping[str, Any]) -> list[
         errors.append("DPO chosen/rejected response is empty")
     if chosen == rejected:
         errors.append("DPO chosen and rejected are identical")
+    min_chosen_chars = int(config.get("min_chosen_chars", 40))
+    if len(chosen) < min_chosen_chars:
+        errors.append(f"DPO chosen response is too short for a useful positive (< {min_chosen_chars} chars)")
     min_rejected_chars = int(config.get("min_rejected_chars", 40))
     if len(rejected) < min_rejected_chars:
         errors.append(f"DPO rejected response is too short for a plausible hard negative (< {min_rejected_chars} chars)")
@@ -32,4 +35,8 @@ def dpo_pair_errors(record: Mapping[str, Any], plan: Mapping[str, Any]) -> list[
         errors.append("DPO record missing metadata.dpo_delta")
     if REFUSAL_RE.search(rejected):
         errors.append("DPO rejected response looks like a refusal instead of a plausible hard negative")
+    # A refusal in the chosen response is worse than one in rejected: it teaches
+    # the model to refuse the correct answer. Always flag it.
+    if REFUSAL_RE.search(chosen):
+        errors.append("DPO chosen response looks like a refusal; the chosen side must demonstrate the target behavior")
     return errors

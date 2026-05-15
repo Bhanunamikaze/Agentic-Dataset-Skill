@@ -3,9 +3,14 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 workspace/run_state.sqlite
+workspace/*.sqlite
 workspace/*.jsonl
 workspace/*.csv
 workspace/*.json
-workspace/DATA_CARD.md
+workspace/*.md
+workspace/*/
 .agent/*
 .agents/*
+
+# Reference clones (kept locally for porting, not committed)
+Agentic-SEO-Skill/
