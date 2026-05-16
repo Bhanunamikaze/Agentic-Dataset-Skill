@@ -31,43 +31,43 @@ Use `--online` for normal installs. With no `--target`, online mode installs eve
 Install every supported target (auto-detected per-IDE):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh | bash -s -- --online
+curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh | bash -s -- --online
 ```
 
 Claude Code only:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh | bash -s -- --online --target claude
+curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh | bash -s -- --online --target claude
 ```
 
 Codex CLI only:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh | bash -s -- --online --target codex
+curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh | bash -s -- --online --target codex
 ```
 
 Antigravity only (project-local):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh | bash -s -- --online --target antigravity --project-dir /path/to/your/project
+curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh | bash -s -- --online --target antigravity --project-dir /path/to/your/project
 ```
 
 User-wide install across Claude, Codex, and Antigravity:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh | bash -s -- --online --target global
+curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh | bash -s -- --online --target global
 ```
 
 Auto-detected install across every supported target:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh | bash -s -- --online --target all --project-dir /path/to/your/project
+curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh | bash -s -- --online --target all --project-dir /path/to/your/project
 ```
 
 Pin a specific release tag:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh
+curl -fsSLO https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh
 bash install.sh --online --ref v0.1.0 --target codex --force
 ```
 
@@ -76,7 +76,7 @@ bash install.sh --online --ref v0.1.0 --target codex --force
 Download the installer:
 
 ```powershell
-iwr https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.ps1 -OutFile install.ps1
+iwr https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.ps1 -OutFile install.ps1
 ```
 
 Install every supported target:
@@ -191,7 +191,7 @@ These IDEs do not have a built-in skill resolver yet, so reference `SKILL.md` fr
 If you want to inspect the installer before running it:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh
+curl -fsSLO https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh
 less install.sh
 bash install.sh --online --target codex
 ```
@@ -199,7 +199,7 @@ bash install.sh --online --target codex
 PowerShell equivalent:
 
 ```powershell
-iwr https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.ps1 -OutFile install.ps1
+iwr https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.ps1 -OutFile install.ps1
 notepad install.ps1
 pwsh ./install.ps1 --online --target codex
 ```

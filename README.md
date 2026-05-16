@@ -1,6 +1,6 @@
 # AI Dataset Generator Skill (Claude / Codex / Antigravity / Cursor / Windsurf / Copilot)
 
-An LLM-first dataset generation skill for agent IDEs and AI coding assistants, with 13 specialized sub-skills, 14 pipeline entry scripts, and 15 shared utility modules that turn topics, URLs, or raw files into SFT and DPO training datasets.
+An LLM-first dataset generation skill for agent IDEs and AI coding assistants, with 14 specialized sub-skills, 19 pipeline entry scripts, and 15 shared utility modules that turn topics, URLs, or raw files into SFT and DPO training datasets.
 
 For detailed installation guidance, example prompts, command reference, generation workflow, reports, and the full script inventory, see the **[Wiki](https://github.com/Bhanunamikaze/ai-dataset-generator/wiki)**.
 
@@ -22,7 +22,7 @@ The installer ships native formats for each tool — not just a generic copy:
 
 ## 📦 Current Inventory
 
-- Specialized sub-skills: `13`
+- Specialized sub-skills: `14`
 - Pipeline entry scripts in `scripts/`: `19` (`audit.py`, `augment.py`, `browser_collect.py`, `build_loop.py`, `collect.py`, `coverage.py`, `dedup.py`, `draft_self_check.py`, `export.py`, `generate.py`, `grounding.py`, `judge_insights.py`, `quality_report.py`, `record_history.py`, `research.py`, `review_batch.py`, `status.py`, `verify.py`)
 - Shared utility modules in `scripts/utils/`: `15`
 - Internal canonical schema: `1` (`resources/internal-schema/canonical_schema.json`)
@@ -103,52 +103,47 @@ The fixed/flexible split is intentional:
 
 ---
 
-## Installation (All IDEs)
+## 🔧 Installation
 
 All `--online` commands below download the latest release package from GitHub automatically. With no `--target`, `--online` installs to every supported IDE.
 
-The installer supports `--target <name>` with values: `claude`, `codex`, `antigravity`, `cowork`, `cursor`, `windsurf`, `continue`, `copilot`, `cline`, `global`, `project`, `all`.
+### Quick install (no cloning required)
 
-### 1. Workspace Install (Recommended)
-
-Use this when you want the skill inside a specific project. With `--target all`, every project-local IDE gets the native format at once.
-
-**Linux / macOS (Bash):**
+**Linux / macOS:**
 ```bash
-# Default: installs to every project-local target at once
-curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh | bash -s -- --online --target all --project-dir /path/to/your/project
+# Default: installs to every target at once
+curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh | bash -s -- --online
 
-# Single IDE, project-local
-curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh | bash -s -- --online --target cursor --project-dir /path/to/your/project
+# Claude Code only
+curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh | bash -s -- --online --target claude
+
+# User-wide (Claude + Codex)
+curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh | bash -s -- --online --target global
+
+# Every target, scoped to a project
+curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh | bash -s -- --online --target all --project-dir /path/to/your/project
 ```
 
 **Windows (PowerShell 7+):**
 ```powershell
-Invoke-Expression "& { $(Invoke-RestMethod 'https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.ps1') } --online --target all --project-dir C:\path\to\your\project"
+# Download installer, then run with --online
+irm https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.ps1 -OutFile install.ps1
+
+# Default: installs to every target at once
+pwsh ./install.ps1 --online
+
+# Claude Code only
+pwsh ./install.ps1 --online --target claude
+
+# Every target, scoped to a project
+pwsh ./install.ps1 --online --target all --project-dir C:\path\to\your\project
 ```
 
-### 2. Global Install (User-Wide)
+### From source
 
-Use this when you want one shared install for all projects on your machine (Claude Code + Codex CLI).
-
-**Linux / macOS (Bash):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh | bash -s -- --online --target global
-```
-
-**Windows (PowerShell 7+):**
-```powershell
-Invoke-Expression "& { $(Invoke-RestMethod 'https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.ps1') } --online --target global"
-```
-
-### 3. From a Local Checkout
-
-Use this when you want to inspect or edit the repo before installing.
-
-**Linux / macOS (Bash):**
-```bash
-git clone https://github.com/Bhanunamikaze/ai-dataset-generator.git
-cd ai-dataset-generator
+git clone https://github.com/Bhanunamikaze/AI-Dataset-Generator.git
+cd AI-Dataset-Generator
 
 # Claude Code (most common)
 bash install.sh --target claude
@@ -159,20 +154,20 @@ bash install.sh --target codex
 # Claude Cowork / project-scoped (installs to .claude/skills/, commit to git to share with team)
 bash install.sh --target cowork --project-dir /path/to/your/project
 
-# Cursor (writes .cursor/rules/dataset-generator.mdc)
+# GitHub Copilot Chat (writes .github/copilot-instructions.md)
+bash install.sh --target copilot --project-dir /path/to/your/project
+
+# Cursor AI (writes .cursor/rules/dataset-generator.mdc)
 bash install.sh --target cursor --project-dir /path/to/your/project
 
 # Windsurf (writes .windsurf/rules/dataset-generator.md)
 bash install.sh --target windsurf --project-dir /path/to/your/project
 
-# Continue.dev (writes .continue/prompts/dataset-generator.prompt)
-bash install.sh --target continue --project-dir /path/to/your/project
-
-# GitHub Copilot Chat (writes .github/copilot-instructions.md)
-bash install.sh --target copilot --project-dir /path/to/your/project
-
 # Cline (writes .clinerules)
 bash install.sh --target cline --project-dir /path/to/your/project
+
+# Continue.dev (writes .continue/prompts/dataset-generator.prompt)
+bash install.sh --target continue --project-dir /path/to/your/project
 
 # Antigravity (writes .agent/skills/dataset-generator)
 bash install.sh --target antigravity --project-dir /path/to/your/project
@@ -199,7 +194,7 @@ bash install.sh --target claude --install-deps
 
 **Safer remote install (download, inspect, run):**
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Bhanunamikaze/ai-dataset-generator/main/install.sh
+curl -fsSLO https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh
 less install.sh                  # review before running
 bash install.sh --online
 ```
@@ -213,6 +208,9 @@ bash install.sh --online
 | `--skill-name <name>` | `dataset-generator` | Override the installed folder/file name. |
 | `--online` | off | Fetch the latest release/branch archive from GitHub instead of using the local tree. |
 | `--ref <branch-or-tag>` | `main` | Branch or tag to use in `--online` mode. |
+| `--repo-url <url>` | upstream | Override the source repo for remote clone. |
+| `--source <auto\|local\|remote>` | `auto` | Force the source resolution mode. |
+| `--repo-path <path>` | — | Use a specific local checkout as the install source. |
 | `--install-deps` | off | Also `pip install --user -r requirements.txt`. |
 | `--force` | off | Overwrite an existing installed skill. (`--online` implies `--force`.) |
 | `-h`, `--help` | — | Show the full usage block. |
@@ -222,20 +220,24 @@ bash install.sh --online
 If you skipped `--install-deps`:
 
 ```bash
-python3 -m pip install -r requirements.txt
+pip install -r requirements.txt
+# Optional — for web-research evidence collection:
+pip install -r requirements-research.txt
+# Optional — for JavaScript-rendered page collection:
+pip install playwright && playwright install chromium
 ```
-
-An optional GPT Researcher backend is available via `requirements-research.txt`. The native research backend remains the default.
 
 ### Verify Triggering
 
 The skill will auto-trigger when you mention dataset-related keywords in your IDE. Try:
 
 - *"Generate a 1500-example legal intake dataset"*
+- *"Generate a 1000-example DPO dataset for Python code review"*
 - *"Turn these URLs into a training dataset"*
 - *"Use web research to build a fintech FAQ dataset"*
 - *"Normalize this CSV into OpenAI JSONL"*
 - *"Verify and score this dataset.jsonl"*
+- *"Audit this dataset for leakage and synthetic patterns"*
 
 ---
 
