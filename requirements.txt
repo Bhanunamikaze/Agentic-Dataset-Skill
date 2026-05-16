@@ -4,5 +4,5 @@ jsonschema>=4.26,<5
 # Install with: python3 -m pip install -r requirements.txt
 requests>=2.31,<3
 beautifulsoup4>=4.12,<5
-trafilatura>=1.12,<2
+trafilatura>=2.0.0,<3
 duckduckgo-search>=6.1,<8
