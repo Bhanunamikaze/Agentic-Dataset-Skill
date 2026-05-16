@@ -100,6 +100,8 @@ This orchestrates import-time dedup, optional verify/dedup, and a coverage check
 For short-label classification corpora, lower `--verify-min-response-length` so labels like `VULNERABLE` are not rejected by the generic heuristic floor.
 If the coverage plan sets `require_review_file: true`, `build_loop.py` will fail fast unless `--review-file` is provided so semantic judging runs during the build.
 
+After each batch, `build_loop.py` writes `workspace/build_loop_progress.json` with `batches_done`, `last_coverage`, and a `drift` object (`drift_score`, `drift_flag`, `new_gaps`, `resolved_gaps`). Read this file to check progress between batches. If `drift_flag: true`, inspect the new gaps before sending the next batch. Use `record_history.py` to append a lineage snapshot to `workspace/record_history.jsonl` at any point.
+
 Manual import path:
 
 ```bash
@@ -165,6 +167,14 @@ Before semantic judging, inspect records with `metadata.requires_manual_review` 
 ```bash
 python3 scripts/verify.py --from-status raw_generated --review-file <review.jsonl> [--plan-file <coverage_plan.json>]
 ```
+
+After adjudication, run `judge_insights.py` to understand why records failed and what to fix before re-drafting:
+
+```bash
+python3 scripts/judge_insights.py --review-file <review.jsonl> [--output workspace/judge_insights.json] [--top-n 10]
+```
+
+The output clusters `fail_reasons` into canonical buckets (`vague_instruction`, `weak_response`, `apology_opener`, `trope_opener`, `refusal_error`, `grounding_fail`, `dpo_quality`, `format_violation`, `leakage`, `other`) and emits one actionable recommendation per bucket. Use the `recommendations` array to guide the next draft batch.
 
 8. Deduplicate passing records:
 

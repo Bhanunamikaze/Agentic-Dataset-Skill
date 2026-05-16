@@ -1,0 +1,50 @@
+{
+  "target_effective_count": 200,
+  "group_fields": ["metadata.intent", "metadata.category"],
+  "group_minimums": {
+    "metadata.intent=refuse_harmful": 40,
+    "metadata.intent=classify_jailbreak": 40,
+    "metadata.intent=refuse_pii_extraction": 30,
+    "metadata.intent=refuse_malware": 30,
+    "metadata.intent=classify_prompt_injection": 40,
+    "metadata.category=safety": 200
+  },
+  "quality_filter": {
+    "task_relative_minimums": true,
+    "anti_trope": false
+  },
+  "syntax_checks": {
+    "python": false,
+    "json": false
+  },
+  "code_quality": {
+    "enabled": false,
+    "python_ast": false,
+    "json": false,
+    "javascript_balance": false,
+    "shell_balance": false,
+    "sql_balance": false
+  },
+  "dpo_audit": {
+    "enabled": false,
+    "require_delta": false,
+    "min_chosen_chars": 0,
+    "min_rejected_chars": 0,
+    "max_length_ratio": 3.0
+  },
+  "benchmark_contamination": {
+    "enabled": true,
+    "blocking": false
+  },
+  "grounding": {
+    "require_evidence_ids": false,
+    "minimum_response_evidence_overlap": 0.0
+  },
+  "provenance": {
+    "field": "metadata.source_origin",
+    "real_world_values": ["real_world"],
+    "minimum_real_world_share": 0.2,
+    "reference_fields": ["metadata.reference_urls", "source_uri"],
+    "blocking": false
+  }
+}

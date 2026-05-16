@@ -23,7 +23,7 @@ The installer ships native formats for each tool — not just a generic copy:
 ## 📦 Current Inventory
 
 - Specialized sub-skills: `13`
-- Pipeline entry scripts in `scripts/`: `14` (`audit.py`, `augment.py`, `browser_collect.py`, `build_loop.py`, `collect.py`, `coverage.py`, `dedup.py`, `export.py`, `generate.py`, `grounding.py`, `quality_report.py`, `research.py`, `review_batch.py`, `verify.py`)
+- Pipeline entry scripts in `scripts/`: `19` (`audit.py`, `augment.py`, `browser_collect.py`, `build_loop.py`, `collect.py`, `coverage.py`, `dedup.py`, `draft_self_check.py`, `export.py`, `generate.py`, `grounding.py`, `judge_insights.py`, `quality_report.py`, `record_history.py`, `research.py`, `review_batch.py`, `status.py`, `verify.py`)
 - Shared utility modules in `scripts/utils/`: `15`
 - Internal canonical schema: `1` (`resources/internal-schema/canonical_schema.json`)
 - Preset export schemas: `3` (in `resources/target-schemas/`: OpenAI messages, HuggingFace dataset, CSV columns)
@@ -34,7 +34,7 @@ The README only highlights the scripts most users reach for first. See the full 
 
 | Script | Best for |
 |---|---|
-| `build_loop.py` | End-to-end batch build: import drafts, import-time dedup, verify, coverage check, optional review-file gating per batch. |
+| `build_loop.py` | End-to-end batch build: import drafts, verify, coverage check, dedup, per-batch drift detection, and live progress to `workspace/build_loop_progress.json`. |
 | `generate.py` | Import canonical draft JSONL into SQLite with `--source-type`, `--dedup-threshold`, and injection-tolerant handling for adversarial corpora. |
 | `collect.py` | Multi-backend web search + URL/local-file fallback that emits canonical JSONL the agent can draft from. |
 | `research.py` | Research-first evidence pipeline that writes `research_plan.json`, `sources.jsonl`, `evidence.jsonl`, and a coverage report for real-world grounding. |
@@ -44,13 +44,17 @@ The README only highlights the scripts most users reach for first. See the full 
 | `audit.py` | Corpus-level audit: split disjointness, context leakage, taxonomy coverage, reasoning variety, synthetic fingerprint detection. |
 | `export.py` | OpenAI / HuggingFace / CSV / JSONL export with split control, custom flat schemas, data-card generation, and model-visibility sanitization. |
 | `grounding.py` | Verifies real-world provenance and evidence reference fields on drafted records before they reach verify. |
+| `status.py` | Single-shot corpus snapshot: effective count, target gap, status breakdown, and top fail reasons. |
+| `draft_self_check.py` | Pre-import draft lint: trope openers, missing metadata, instruction fidelity, DPO-specific checks. |
+| `judge_insights.py` | Cluster `fail_reasons` from a review file into 10 canonical buckets with actionable recommendations. |
+| `record_history.py` | Append a lineage snapshot (status counts, task-type breakdown, effective count) to `workspace/record_history.jsonl`. |
 
 ## 🐙 GitHub Repository Metadata
 
 Recommended GitHub repository description (About field):
 
 ```text
-LLM-first dataset generator skill for Claude Code, Codex, Antigravity, Cursor, Windsurf, Continue, Copilot, and Cline — 13 sub-skills, 14 pipeline scripts, and SFT/DPO workflows that turn topics, URLs, web research, or raw JSONL/CSV into training-ready datasets with coverage steering, semantic review, and corpus audits.
+LLM-first dataset generator skill for Claude Code, Codex, Antigravity, Cursor, Windsurf, Continue, Copilot, and Cline — 13 sub-skills, 19 pipeline scripts, and SFT/DPO workflows that turn topics, URLs, web research, or raw JSONL/CSV into training-ready datasets with coverage steering, per-batch drift detection, agent observability, and corpus audits.
 ```
 
 Suggested GitHub topics:

@@ -1,0 +1,52 @@
+{
+  "target_effective_count": 600,
+  "group_fields": ["metadata.domain", "metadata.difficulty"],
+  "group_minimums": {
+    "metadata.domain=biomedical": 100,
+    "metadata.domain=legal": 100,
+    "metadata.domain=news": 100,
+    "metadata.domain=technical_docs": 100,
+    "metadata.domain=financial": 100,
+    "metadata.difficulty=easy": 100,
+    "metadata.difficulty=medium": 300,
+    "metadata.difficulty=hard": 200
+  },
+  "quality_filter": {
+    "task_relative_minimums": true,
+    "anti_trope": true
+  },
+  "syntax_checks": {
+    "python": false,
+    "json": true
+  },
+  "code_quality": {
+    "enabled": false,
+    "python_ast": false,
+    "json": true,
+    "javascript_balance": false,
+    "shell_balance": false,
+    "sql_balance": false
+  },
+  "dpo_audit": {
+    "enabled": false,
+    "require_delta": false,
+    "min_chosen_chars": 0,
+    "min_rejected_chars": 0,
+    "max_length_ratio": 3.0
+  },
+  "benchmark_contamination": {
+    "enabled": true,
+    "blocking": true
+  },
+  "grounding": {
+    "require_evidence_ids": true,
+    "minimum_response_evidence_overlap": 0.25
+  },
+  "provenance": {
+    "field": "metadata.source_origin",
+    "real_world_values": ["real_world"],
+    "minimum_real_world_share": 0.5,
+    "reference_fields": ["metadata.reference_urls", "source_uri"],
+    "blocking": false
+  }
+}

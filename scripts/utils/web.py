@@ -56,10 +56,15 @@ except ImportError:
     HAS_BS4 = False
 
 try:
-    from duckduckgo_search import DDGS as _DDGS  # type: ignore[import]
+    from ddgs import DDGS as _DDGS  # type: ignore[import]
     HAS_DDGS = True
 except ImportError:
-    HAS_DDGS = False
+    try:
+        from duckduckgo_search import DDGS as _DDGS  # type: ignore[import]
+        HAS_DDGS = True
+    except ImportError:
+        HAS_DDGS = False
+        _DDGS = None  # type: ignore[assignment,misc]
 
 
 # ---------------------------------------------------------------------------

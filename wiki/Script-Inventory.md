@@ -16,7 +16,7 @@ The skill ships a small set of deterministic Python scripts plus shared utility 
 |---|---|---|
 | `generate.py` | Turning drafted JSONL into canonical SQLite records. | Marks rows `raw_generated`; honours `--allow-injections` and `--enforce-security-flags` for adversarial corpora. |
 | `augment.py` | Diversity transforms across persona, tone, difficulty, and adversarial axes. | Metadata-only variants are marked `rewrite_required` until the agent supplies rewritten content. |
-| `build_loop.py` | One-command generate -> coverage -> verify -> dedup -> export. | Reads `--plan-file`; refuses to run without `--review-file` when the plan sets `require_review_file: true`. |
+| `build_loop.py` | One-command generate -> coverage -> verify -> dedup -> export. | Reads `--plan-file`; detects per-batch drift and writes live progress to `workspace/build_loop_progress.json`; refuses to run without `--review-file` when the plan sets `require_review_file: true`. |
 
 ## Collection
 
@@ -37,6 +37,15 @@ The skill ships a small set of deterministic Python scripts plus shared utility 
 | `audit.py` | Corpus-level audit across the train/test splits. | Checks split disjointness, taxonomy coverage, source diversity, label balance, synthetic fingerprint, cluster-fallback rate, and context leakage. |
 | `quality_report.py` | Corpus-level quality summary. | Emits `workspace/QUALITY_REPORT.json` with response length, structure, and prefix-repetition stats. |
 | `review_batch.py` | Build a host-agent review prompt and adjudicate the resulting `review.jsonl`. | Used when semantic LLM judging is required without calling external LLM APIs from local scripts. |
+
+## Agent Observability
+
+| Script | Best for | Notes |
+|---|---|---|
+| `status.py` | Single-shot corpus snapshot. | Reports effective count, target gap, status breakdown, real-world ratio, top fail reasons, and bucket fills/gaps. |
+| `draft_self_check.py` | Pre-import draft linting. | Deterministic checks against seed-generator rules: multi-constraint, trope opener, missing metadata, DPO specifics. |
+| `judge_insights.py` | Cluster `fail_reasons` from a review file. | Fully deterministic substring matching into 10 canonical buckets; emits counts, examples, and actionable recommendations. |
+| `record_history.py` | Append a lineage snapshot of the DB to a JSONL log. | Records status counts, task-type breakdown, and effective count at a point in time for between-batch tracking. |
 
 ## Export
 
@@ -64,4 +73,4 @@ The skill ships a small set of deterministic Python scripts plus shared utility 
 | `dpo_quality.py` | DPO-pair gates including chosen/rejected length skew and refusal-in-rejected detection. |
 | `benchmark_guard.py` | Public-benchmark fingerprint guardrail to block accidental contamination. |
 
-14 pipeline scripts + 15 utility modules in `scripts/utils/`.
+19 pipeline scripts + 15 utility modules in `scripts/utils/`.

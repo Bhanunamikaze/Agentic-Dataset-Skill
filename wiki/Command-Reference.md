@@ -81,3 +81,135 @@ Treat it as a corpus-level quality assessment and produce:
 - `workspace/AUDIT_REPORT.md`
 
 For deeper command guidance, see [[Generation Workflow]] and [[Datasets and Exports]].
+
+## Script Reference
+
+### `judge_insights.py`
+
+Clusters `fail_reasons` from a `review.jsonl` LLM-judge output file and produces a structured JSON summary of failure patterns with actionable recommendations.
+
+| Flag | Required | Default | Description |
+|---|---|---|---|
+| `--review-file PATH` | yes | — | Path to the `review.jsonl` produced by the LLM judge. |
+| `--output PATH` | no | stdout | Write JSON summary to a file instead of stdout. |
+| `--top-n INT` | no | `10` | Maximum number of failure-pattern buckets to include. |
+
+**Output shape:**
+
+```json
+{
+  "total": 100,
+  "pass_count": 70,
+  "fail_count": 30,
+  "pass_rate": 0.70,
+  "top_failure_patterns": [
+    {"bucket": "vague_instruction", "count": 12, "examples": ["instruction too vague", "ambiguous prompt"]}
+  ],
+  "recommendations": [
+    "12 records failed vague_instruction — tighten instruction specificity in seed-generator prompts"
+  ]
+}
+```
+
+**Canonical buckets:** `vague_instruction`, `weak_response`, `apology_opener`, `trope_opener`, `refusal_error`, `grounding_fail`, `dpo_quality`, `format_violation`, `leakage`, `other`.
+
+Classification is fully deterministic substring matching — no external LLM calls.
+
+**Example usage:**
+
+```bash
+python3 scripts/judge_insights.py --review-file workspace/review.jsonl
+python3 scripts/judge_insights.py --review-file workspace/review.jsonl --output workspace/judge_insights.json --top-n 5
+```
+
+### `build_loop.py` — drift detection and live progress
+
+As of Phase 15, `build_loop.py` adds two new outputs on every run:
+
+**Per-batch drift field** — each entry in `batches_processed` now includes a `drift` object:
+
+```json
+{
+  "drift_score": 0.12,
+  "drift_flag": true,
+  "pass_rate_delta": -0.08,
+  "gap_count_delta": 2,
+  "new_gaps": ["difficulty=hard"],
+  "resolved_gaps": ["domain=finance"]
+}
+```
+
+`drift_flag: true` means the pass rate or gap count shifted enough between batches to warrant inspection before sending the next batch. A `drift_score > 0.10` triggers the flag.
+
+**Live progress file** — written to `workspace/build_loop_progress.json` on every batch boundary (including at session start and end):
+
+```json
+{
+  "session_id": "build_abc123",
+  "batches_total": 5,
+  "batches_done": 2,
+  "last_batch_path": "workspace/drafts_batch_02.jsonl",
+  "last_coverage": { "...": "..." },
+  "last_drift": { "drift_score": 0.04, "drift_flag": false },
+  "complete": false,
+  "timestamp": "2026-05-16T12:34:56"
+}
+```
+
+Read this file between batches to track progress without waiting for the full build to finish.
+
+### `record_history.py`
+
+Appends a lineage snapshot of the current database state to a JSONL log. Call it between batches to track corpus evolution over time.
+
+| Flag | Required | Default | Description |
+|---|---|---|---|
+| `--db PATH` | yes | — | SQLite database path. |
+| `--output PATH` | no | `workspace/record_history.jsonl` | Appended JSONL log file. |
+| `--note TEXT` | no | `""` | Free-text label for this snapshot. |
+| `--source-run-id TEXT` | no | `null` | Associate snapshot with a run ID. |
+
+**Output shape (also printed to stdout):**
+
+```json
+{
+  "timestamp": "2026-05-16T12:00:00+00:00",
+  "db_path": "/path/to/build_loop_abc.sqlite",
+  "note": "after batch 2",
+  "source_run_id": null,
+  "status_counts": {
+    "raw_generated": 10,
+    "augmented": 5,
+    "verified_pass": 80,
+    "verified_fail": 12,
+    "judge_pending": 3,
+    "deduped": 2
+  },
+  "total_records": 112,
+  "effective_count": 83,
+  "task_type_counts": {"sft": 70, "dpo": 13}
+}
+```
+
+**Example usage:**
+
+```bash
+python3 scripts/record_history.py --db workspace/build_loop_abc.sqlite --note "after batch 2"
+python3 scripts/record_history.py --db workspace/build_loop_abc.sqlite --output workspace/my_history.jsonl
+```
+
+### `status.py`
+
+Single-shot corpus snapshot — reads the SQLite database and emits effective count, target gap, status breakdown, coverage gaps, and top fail reasons.
+
+```bash
+python3 scripts/status.py --db workspace/build_loop_abc.sqlite [--plan-file resources/templates/production_quality_plan.json]
+```
+
+### `draft_self_check.py`
+
+Lints a drafts JSONL file before import against seed-generator rules. Catches trope openers, missing required metadata, instruction fidelity issues, and DPO-specific problems.
+
+```bash
+python3 scripts/draft_self_check.py --input workspace/drafts_batch_01.jsonl [--plan-file resources/templates/production_quality_plan.json]
+```
