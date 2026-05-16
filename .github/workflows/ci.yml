@@ -1,19 +1,15 @@
 name: CI
 
 on:
+  pull_request:
   push:
     branches:
-      - "**"
-    tags:
-      - "*"
-  pull_request:
-
-permissions:
-  contents: write
+      - main
 
 jobs:
-  test:
+  validate:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,62 +18,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Compile scripts
-        run: |
-          python -m py_compile scripts/generate.py scripts/augment.py scripts/verify.py scripts/dedup.py scripts/export.py scripts/collect.py
-          python -m py_compile scripts/utils/db.py scripts/utils/files.py scripts/utils/schema.py scripts/utils/canonical.py scripts/utils/security.py scripts/utils/web.py
+      - name: Compile Python scripts
+        run: python -m compileall scripts
 
       - name: Run tests
-        run: python -m unittest discover -s tests -p "test*.py"
-
-  package:
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build runtime skill package
-        env:
-          TAG_NAME: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          PACKAGE_ROOT="package/dataset-generator"
-          DIST_DIR="dist"
-          mkdir -p "${PACKAGE_ROOT}" "${PACKAGE_ROOT}/workspace" "${DIST_DIR}"
-          cp SKILL.md "${PACKAGE_ROOT}/"
-          cp -R scripts sub-skills resources "${PACKAGE_ROOT}/"
-          find "${PACKAGE_ROOT}" -type d -name "__pycache__" -prune -exec rm -rf {} +
-          find "${PACKAGE_ROOT}" -type f -name "*.pyc" -delete
-          tar -czf "${DIST_DIR}/dataset-generator-skill-${TAG_NAME}.tar.gz" -C package dataset-generator
-          (
-            cd package
-            zip -qr "../${DIST_DIR}/dataset-generator-skill-${TAG_NAME}.zip" dataset-generator
-          )
-          sha256sum "${DIST_DIR}/dataset-generator-skill-${TAG_NAME}.tar.gz" > "${DIST_DIR}/dataset-generator-skill-${TAG_NAME}.tar.gz.sha256"
-          sha256sum "${DIST_DIR}/dataset-generator-skill-${TAG_NAME}.zip" > "${DIST_DIR}/dataset-generator-skill-${TAG_NAME}.zip.sha256"
-
-      - name: Upload packaged artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dataset-generator-skill-${{ github.ref_name }}
-          path: |
-            dist/*
-            install.sh
-            install.ps1
-
-      - name: Publish GitHub release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            dist/*
-            install.sh
-            install.ps1
+        run: python -m pytest tests/ -x -q

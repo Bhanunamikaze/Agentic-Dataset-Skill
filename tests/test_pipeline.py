@@ -2232,5 +2232,538 @@ class CollectorTests(unittest.TestCase):
                 self.assertFalse(path.endswith(".csv"), f"Should not collect .csv files: {path}")
 
 
+class ResearchPlannerTests(unittest.TestCase):
+    def test_basic_query_produces_subqueries(self):
+        from scripts.utils.research_plan import build_research_plan
+        plan = build_research_plan(query="prompt injection in LLM apps")
+        self.assertEqual(plan["subqueries"][0]["query"], "prompt injection in LLM apps")
+        self.assertGreaterEqual(len(plan["subqueries"]), 5)
+
+    def test_taxonomy_values_included_in_subqueries(self):
+        from scripts.utils.research_plan import build_research_plan
+        coverage = {"taxonomy": {"category": ["sql", "xss"]}}
+        plan = build_research_plan(query="web security", plan=coverage)
+        queries = [s["query"] for s in plan["subqueries"]]
+        self.assertTrue(any("sql" in q for q in queries))
+        self.assertTrue(any("xss" in q for q in queries))
+
+    def test_max_subqueries_truncates(self):
+        from scripts.utils.research_plan import build_research_plan
+        plan = build_research_plan(query="machine learning", max_subqueries=3)
+        self.assertLessEqual(len(plan["subqueries"]), 3)
+
+    def test_subquery_ids_follow_rq_format(self):
+        from scripts.utils.research_plan import build_research_plan
+        plan = build_research_plan(query="security")
+        for sub in plan["subqueries"]:
+            self.assertRegex(sub["id"], r"^rq_\d+$")
+
+    def test_empty_query_and_plan_returns_empty_subqueries(self):
+        from scripts.utils.research_plan import build_research_plan
+        plan = build_research_plan(query="")
+        self.assertEqual(plan["subqueries"], [])
+
+
+class SourceQualityTests(unittest.TestCase):
+    def test_domain_from_url_strips_www_and_lowercases(self):
+        from scripts.utils.source_quality import domain_from_url
+        self.assertEqual(domain_from_url("https://www.GitHub.com/foo"), "github.com")
+
+    def test_classify_documentation(self):
+        from scripts.utils.source_quality import classify_source_type
+        result = classify_source_type("https://docs.python.org/3/library/json.html")
+        self.assertEqual(result, "documentation")
+
+    def test_classify_code_or_issue_tracker(self):
+        from scripts.utils.source_quality import classify_source_type
+        result = classify_source_type("https://github.com/org/repo/issues/1")
+        self.assertEqual(result, "code_or_issue_tracker")
+
+    def test_github_url_scores_higher_than_generic_blog(self):
+        from scripts.utils.source_quality import source_quality_score
+        body = "a" * 2000
+        github_score = source_quality_score(url="https://github.com/foo/bar", title="foo security", snippet="", text=body, query="foo security")
+        blog_score = source_quality_score(url="https://randomblog.example.com/post", title="foo security", snippet="", text=body, query="foo security")
+        self.assertGreater(github_score, blog_score)
+
+    def test_boilerplate_penalty_bounded(self):
+        from scripts.utils.source_quality import boilerplate_penalty
+        penalty = boilerplate_penalty("Subscribe! Cookie policy. Sign up. Privacy policy.")
+        self.assertGreater(penalty, 0.0)
+        self.assertLessEqual(penalty, 0.35)
+
+    def test_source_distribution_returns_expected_keys(self):
+        from scripts.utils.source_quality import source_distribution
+        sources = [{"url": "https://github.com/a"}, {"url": "https://stackoverflow.com/q/1"}, {"url": "https://github.com/b"}]
+        dist = source_distribution(sources)
+        self.assertIn("unique_domains", dist)
+        self.assertIn("domain_counts", dist)
+        self.assertEqual(dist["unique_domains"], 2)
+
+
+class SourceDedupTests(unittest.TestCase):
+    def test_canonicalize_strips_utm_params(self):
+        from scripts.utils.source_dedup import canonicalize_url
+        result = canonicalize_url("https://Example.com/Foo/?utm_source=x&a=1")
+        self.assertNotIn("utm_source", result)
+        self.assertIn("a=1", result)
+        self.assertIn("example.com", result)
+
+    def test_canonicalize_collapses_double_slashes(self):
+        from scripts.utils.source_dedup import canonicalize_url
+        result = canonicalize_url("https://example.com//foo//bar/")
+        self.assertNotIn("//foo", result)
+
+    def test_dedupe_sources_removes_tracking_param_duplicate(self):
+        from scripts.utils.source_dedup import dedupe_sources
+        sources = [
+            {"url": "https://example.com/page?utm_source=a"},
+            {"url": "https://example.com/page?utm_source=b"},
+        ]
+        unique = dedupe_sources(sources)
+        self.assertEqual(len(unique), 1)
+        self.assertIn("canonical_uri", unique[0])
+
+    def test_dedupe_sources_keeps_different_domains(self):
+        from scripts.utils.source_dedup import dedupe_sources
+        sources = [{"url": "https://a.com/x"}, {"url": "https://b.com/x"}]
+        unique = dedupe_sources(sources)
+        self.assertEqual(len(unique), 2)
+
+
+class WebSafetyTests(unittest.TestCase):
+    def test_public_https_is_fetchable(self):
+        from scripts.utils.web import is_url_fetchable
+        self.assertTrue(is_url_fetchable("https://example.com"))
+
+    def test_localhost_blocked_by_default(self):
+        from scripts.utils.web import is_url_fetchable
+        for url in ["http://localhost", "http://127.0.0.1", "http://0.0.0.0"]:
+            self.assertFalse(is_url_fetchable(url), f"Expected {url} to be blocked")
+
+    def test_private_ips_blocked(self):
+        from scripts.utils.web import is_url_fetchable
+        for url in ["http://10.0.0.1", "http://192.168.1.1"]:
+            self.assertFalse(is_url_fetchable(url))
+
+    def test_allow_private_network_flag(self):
+        from scripts.utils.web import is_url_fetchable
+        self.assertTrue(is_url_fetchable("http://127.0.0.1", allow_private_network=True))
+
+    def test_non_http_schemes_blocked(self):
+        from scripts.utils.web import is_url_fetchable
+        self.assertFalse(is_url_fetchable("ftp://example.com"))
+        self.assertFalse(is_url_fetchable("file:///etc/passwd"))
+
+    def test_empty_string_blocked(self):
+        from scripts.utils.web import is_url_fetchable
+        self.assertFalse(is_url_fetchable(""))
+
+
+class SearchAggregationTests(unittest.TestCase):
+    def test_deduplicates_overlapping_results_across_backends(self):
+        from scripts.utils.web import search_web_all_backends, SearchResult
+        result_a = [SearchResult(title="A", url="https://a.com", snippet="")]
+        result_b = [SearchResult(title="A", url="https://a.com", snippet=""), SearchResult(title="B", url="https://b.com", snippet="")]
+        with unittest.mock.patch("scripts.utils.web._search_serpapi", return_value=result_a), \
+             unittest.mock.patch("scripts.utils.web._search_bing", return_value=result_b), \
+             unittest.mock.patch("scripts.utils.web._search_google_cse", return_value=[]), \
+             unittest.mock.patch("scripts.utils.web._search_duckduckgo_lib", return_value=[]), \
+             unittest.mock.patch("scripts.utils.web._search_duckduckgo_html", return_value=[]):
+            results = search_web_all_backends("test query", max_results=10)
+        urls = [r.url for r in results]
+        self.assertEqual(len(urls), len(set(urls)))  # no duplicates
+        self.assertIn("https://a.com", urls)
+        self.assertIn("https://b.com", urls)
+
+    def test_max_results_limit_enforced(self):
+        from scripts.utils.web import search_web_all_backends, SearchResult
+        many = [SearchResult(title=str(i), url=f"https://site{i}.com", snippet="") for i in range(20)]
+        with unittest.mock.patch("scripts.utils.web._search_serpapi", return_value=many), \
+             unittest.mock.patch("scripts.utils.web._search_bing", return_value=[]), \
+             unittest.mock.patch("scripts.utils.web._search_google_cse", return_value=[]), \
+             unittest.mock.patch("scripts.utils.web._search_duckduckgo_lib", return_value=[]), \
+             unittest.mock.patch("scripts.utils.web._search_duckduckgo_html", return_value=[]):
+            results = search_web_all_backends("test", max_results=3)
+        self.assertLessEqual(len(results), 3)
+
+    def test_all_backends_failing_returns_empty(self):
+        from scripts.utils.web import search_web_all_backends
+        with unittest.mock.patch("scripts.utils.web._search_serpapi", side_effect=Exception("err")), \
+             unittest.mock.patch("scripts.utils.web._search_bing", side_effect=Exception("err")), \
+             unittest.mock.patch("scripts.utils.web._search_google_cse", side_effect=Exception("err")), \
+             unittest.mock.patch("scripts.utils.web._search_duckduckgo_lib", side_effect=Exception("err")), \
+             unittest.mock.patch("scripts.utils.web._search_duckduckgo_html", side_effect=Exception("err")):
+            results = search_web_all_backends("test")
+        self.assertEqual(results, [])
+
+
+class ResearchPipelineTests(unittest.TestCase):
+    def _fake_search(self, query, max_results=8, rate_limit_seconds=1.0):
+        from scripts.utils.web import SearchResult
+        return [
+            SearchResult(title="Doc A", url="https://docs.example.com/a", snippet="example content about " + query),
+            SearchResult(title="GitHub B", url="https://github.com/org/repo/issues/1", snippet="issue about " + query),
+        ]
+
+    def _fake_fetch(self, url, **kwargs):
+        from scripts.utils.web import WebPage
+        return WebPage(url=url, status=200, content_type="text/html", html_content="<html><body>" + "word " * 500 + "</body></html>")
+
+    def _fake_extract(self, html, url=""):
+        from scripts.utils.web import ExtractedContent
+        return ExtractedContent(url=url, title="Extracted Title", text="word " * 500)
+
+    def test_native_backend_produces_all_artifacts(self):
+        import json, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "research_out"
+            import argparse
+            args = argparse.Namespace(
+                query="security testing", urls=None, url_file=None, paths=None,
+                backend="native", plan_file=None, taxonomy_file=None,
+                max_subqueries=4, max_results_per_query=2, max_sources=10,
+                max_chunk_chars=800, overlap_chars=80, fetch_timeout=5,
+                rate_limit=0.0, snippets_only=False, allow_private_network=False,
+                extensions=None, max_files=20, tool_context="test",
+                output_dir=str(output_dir), report=None,
+                max_sources_per_domain=5,
+                max_bytes=2_000_000,
+                allowed_content_types=None,
+                per_domain_rate_limit=None,
+            )
+            from scripts.research import run_native_backend
+            with unittest.mock.patch("scripts.utils.web.search_web_all_backends", side_effect=self._fake_search), \
+                 unittest.mock.patch("scripts.utils.web.fetch_url", side_effect=self._fake_fetch), \
+                 unittest.mock.patch("scripts.utils.web.extract_text", side_effect=self._fake_extract):
+                summary = run_native_backend(args, output_dir)
+            self.assertTrue(Path(summary["research_plan"]).exists())
+            self.assertTrue(Path(summary["sources"]).exists())
+            self.assertTrue(Path(summary["evidence"]).exists())
+            self.assertTrue(Path(summary["coverage_report"]).exists())
+            plan = json.loads(Path(summary["research_plan"]).read_text())
+            self.assertTrue(len(plan["subqueries"]) > 0)
+            sources = [json.loads(l) for l in Path(summary["sources"]).read_text().splitlines() if l.strip()]
+            for src in sources:
+                self.assertIsInstance(src.get("source_quality_score"), float)
+                self.assertIn("domain", src)
+            evidence = [json.loads(l) for l in Path(summary["evidence"]).read_text().splitlines() if l.strip()]
+            self.assertTrue(len(evidence) >= 1)
+            source_ids = {s["source_id"] for s in sources}
+            for ev in evidence:
+                self.assertIn(ev["source_id"], source_ids)
+
+    def test_local_path_mode(self):
+        import json, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmpdir:
+            src_dir = Path(tmpdir) / "docs"
+            src_dir.mkdir()
+            (src_dir / "readme.txt").write_text("This is a local file with content. " * 50)
+            output_dir = Path(tmpdir) / "out"
+            import argparse
+            args = argparse.Namespace(
+                query=None, urls=None, url_file=None, paths=[str(src_dir)],
+                backend="native", plan_file=None, taxonomy_file=None,
+                max_subqueries=4, max_results_per_query=2, max_sources=10,
+                max_chunk_chars=800, overlap_chars=80, fetch_timeout=5,
+                rate_limit=0.0, snippets_only=False, allow_private_network=False,
+                extensions=[".txt"], max_files=20, tool_context="test",
+                output_dir=str(output_dir), report=None,
+                max_sources_per_domain=5, max_bytes=2_000_000, allowed_content_types=None, per_domain_rate_limit=None,
+            )
+            from scripts.research import run_native_backend
+            summary = run_native_backend(args, output_dir)
+            sources = [json.loads(l) for l in Path(summary["sources"]).read_text().splitlines() if l.strip()]
+            self.assertTrue(any(s.get("source_mode") == "local_file" for s in sources))
+
+
+class GroundingCheckTests(unittest.TestCase):
+    def _make_record(self, response_text, evidence_ids=None):
+        return {
+            "id": "test_rec",
+            "instruction": "What is X?",
+            "response": {"format": "single", "text": response_text},
+            "metadata": {"evidence_ids": evidence_ids or []},
+        }
+
+    def test_matching_evidence_passes(self):
+        from scripts.grounding import check_record
+        evidence_map = {"ev_001": {"evidence_id": "ev_001", "text": "security vulnerability testing exploit proof of concept"}}
+        record = self._make_record("security vulnerability testing", evidence_ids=["ev_001"])
+        result = check_record(record, evidence_map, {})
+        self.assertEqual(result["status"], "pass")
+
+    def test_missing_evidence_ids_fails(self):
+        from scripts.grounding import check_record
+        record = self._make_record("some response", evidence_ids=[])
+        result = check_record(record, {}, {})
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("missing evidence_ids", result["findings"])
+
+    def test_unknown_evidence_id_fails(self):
+        from scripts.grounding import check_record
+        record = self._make_record("some response", evidence_ids=["ev_unknown"])
+        result = check_record(record, {}, {})
+        self.assertEqual(result["status"], "fail")
+        self.assertTrue(any("unknown evidence_ids" in f for f in result["findings"]))
+
+    def test_low_overlap_fails_when_plan_requires_it(self):
+        from scripts.grounding import check_record
+        evidence_map = {"ev_001": {"evidence_id": "ev_001", "text": "completely unrelated text about cooking recipes"}}
+        record = self._make_record("software security xss injection attack vulnerability", evidence_ids=["ev_001"])
+        plan = {"grounding": {"minimum_response_evidence_overlap": 0.9}}
+        result = check_record(record, evidence_map, plan)
+        self.assertEqual(result["status"], "fail")
+
+
+class AuditScriptTests(unittest.TestCase):
+    def _make_records(self, count, subtopic="general", has_evidence=True, label=None):
+        records = []
+        for i in range(count):
+            meta = {"subtopic": subtopic, "source_origin": "real_world"}
+            if has_evidence:
+                meta["evidence_ids"] = [f"ev_{i}"]
+            if label:
+                meta["label"] = label
+            records.append({
+                "id": f"r{i}", "instruction": f"question {i}",
+                "response": {"format": "single", "text": label or f"answer {i}"},
+                "metadata": meta, "source_uri": f"https://source{i}.com/doc",
+            })
+        return records
+
+    def test_taxonomy_skew_flagged(self):
+        from scripts.audit import taxonomy_findings
+        records = self._make_records(80, subtopic="topic_a") + self._make_records(10, subtopic="topic_b")
+        _, findings = taxonomy_findings(records)
+        self.assertTrue(any(f["check"] == "Taxonomy balance" for f in findings))
+
+    def test_low_evidence_linkage_flagged(self):
+        from scripts.audit import source_findings
+        records = self._make_records(5, has_evidence=True) + self._make_records(15, has_evidence=False)
+        _, findings = source_findings(records)
+        self.assertTrue(any(f["check"] == "Evidence linkage" for f in findings))
+
+    def test_label_imbalance_flagged(self):
+        from scripts.audit import label_balance
+        records = self._make_records(80, label="YES") + self._make_records(10, label="NO")
+        _, findings = label_balance(records)
+        self.assertTrue(any(f["check"] == "Label balance" and f["severity"] in ("High", "Medium") for f in findings))
+
+    def test_repeated_openings_flagged(self):
+        from scripts.audit import synthetic_fingerprint
+        records = []
+        for i in range(20):
+            records.append({
+                "id": f"r{i}", "instruction": f"Q{i}",
+                "response": {"format": "single", "text": "The answer is always the same opening here and goes on"},
+                "metadata": {},
+            })
+        summary, _ = synthetic_fingerprint(records)
+        self.assertGreater(summary["synthetic_score"], 0)
+
+    def test_split_disjointness_flags_overlap(self):
+        import json, tempfile
+        from pathlib import Path
+        from scripts.audit import split_disjointness
+        record_a = {"id": "r1", "instruction": "What is SQL injection?", "response": {"format": "single", "text": "ans"}, "metadata": {"topic": "sql_injection"}, "source_uri": ""}
+        record_b = {"id": "r2", "instruction": "What is XSS?", "response": {"format": "single", "text": "ans"}, "metadata": {"topic": "xss"}, "source_uri": ""}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            train = Path(tmpdir) / "train.jsonl"
+            test = Path(tmpdir) / "test.jsonl"
+            train.write_text(json.dumps(record_a) + "\n" + json.dumps(record_b))
+            test.write_text(json.dumps(record_a))  # overlap
+            summary, findings = split_disjointness(str(train), str(test))
+        self.assertTrue(any(f["check"] == "Split disjointness" for f in findings))
+
+
+class VerifyEvidenceAndCollectedTests(unittest.TestCase):
+    def _make_args(self, min_len=12):
+        import argparse
+        return argparse.Namespace(
+            min_instruction_length=min_len, min_response_length=min_len,
+            require_evidence=False, allow_injections=False,
+        )
+
+    def _make_record(self, response_text="This is a valid response with sufficient content.", status=None, source_origin=None, evidence_ids=None, task_type=None, response_shape=None, intent=None):
+        meta = {}
+        if source_origin:
+            meta["source_origin"] = source_origin
+        if evidence_ids is not None:
+            meta["evidence_ids"] = evidence_ids
+        if task_type:
+            meta["task_type"] = task_type
+        if response_shape:
+            meta["response_shape"] = response_shape
+        if intent:
+            meta["intent"] = intent
+        rec = {
+            "id": "r1", "instruction": "What is the best approach?",
+            "response": {"format": "single", "text": response_text},
+            "metadata": meta, "source_uri": "https://example.com",
+        }
+        if status:
+            rec["status"] = status
+        return rec
+
+    def test_collected_status_blocked(self):
+        from scripts.verify import heuristic_errors
+        record = self._make_record(status="collected")
+        errors = heuristic_errors(record, self._make_args())
+        self.assertTrue(any("collected" in e for e in errors))
+
+    def test_real_world_without_evidence_ids_fails_when_required(self):
+        from scripts.verify import heuristic_errors
+        record = self._make_record(source_origin="real_world", evidence_ids=[])
+        plan = {"grounding": {"require_evidence_ids": True}}
+        errors = heuristic_errors(record, self._make_args(), plan=plan)
+        self.assertTrue(any("evidence_ids" in e for e in errors))
+
+    def test_code_review_short_response_flagged(self):
+        from scripts.verify import heuristic_errors
+        record = self._make_record(response_text="Looks fine.", intent="code_review")
+        plan = {"quality_filter": {"task_relative_minimums": True}}
+        errors = heuristic_errors(record, self._make_args(), plan=plan)
+        self.assertTrue(any("code-review" in e for e in errors))
+
+    def test_classification_short_label_passes(self):
+        from scripts.verify import heuristic_errors
+        record = self._make_record(response_text="YES", task_type="classification")
+        plan = {"quality_filter": {"task_relative_minimums": True}}
+        errors = heuristic_errors(record, self._make_args(min_len=1), plan=plan)
+        code_review_errors = [e for e in errors if "code-review" in e]
+        self.assertEqual(code_review_errors, [])
+
+    def test_invalid_python_block_flagged(self):
+        from scripts.verify import heuristic_errors
+        record = self._make_record(response_text="Here is code:\n```python\ndef f(:\n    pass\n```")
+        plan = {"syntax_checks": {"python": True}}
+        errors = heuristic_errors(record, self._make_args(), plan=plan)
+        self.assertTrue(any("syntax error" in e for e in errors))
+
+    def test_valid_python_block_passes(self):
+        from scripts.verify import heuristic_errors
+        record = self._make_record(response_text="Here is code:\n```python\ndef f(x):\n    return x + 1\n```")
+        plan = {"syntax_checks": {"python": True}}
+        errors = heuristic_errors(record, self._make_args(), plan=plan)
+        syntax_errors = [e for e in errors if "syntax error" in e]
+        self.assertEqual(syntax_errors, [])
+
+
+class ResearchCoverageTests(unittest.TestCase):
+    def _make_record(self, domain, has_evidence=True, quality_score=0.8):
+        return {
+            "id": "r1", "instruction": "Q", "response": {"format": "single", "text": "A"},
+            "metadata": {
+                "source_domain": domain,
+                "evidence_ids": ["ev_1"] if has_evidence else [],
+                "source_quality_score": quality_score,
+            },
+            "source_uri": f"https://{domain}/doc",
+        }
+
+    def test_too_few_unique_domains_flagged(self):
+        from scripts.coverage import compute_research_coverage
+        records = [self._make_record("a.com"), self._make_record("a.com"), self._make_record("b.com")]
+        plan = {"research": {"minimum_unique_domains": 5}}
+        summary, findings = compute_research_coverage(records, plan)
+        self.assertTrue(any(f.get("type") == "unique_domains" for f in findings))
+
+    def test_domain_concentration_flagged(self):
+        from scripts.coverage import compute_research_coverage
+        records = [self._make_record("dominant.com")] * 8 + [self._make_record("other.com")] * 2
+        plan = {"research": {"max_share_per_domain": 0.5}}
+        summary, findings = compute_research_coverage(records, plan)
+        self.assertTrue(any(f.get("type") == "domain_concentration" for f in findings))
+
+    def test_low_evidence_linkage_flagged(self):
+        from scripts.coverage import compute_research_coverage
+        records = [self._make_record("a.com", has_evidence=True)] * 4 + [self._make_record("b.com", has_evidence=False)] * 6
+        plan = {"research": {"minimum_evidence_linked_share": 0.8}}
+        summary, findings = compute_research_coverage(records, plan)
+        self.assertTrue(any(f.get("type") == "evidence_linkage" for f in findings))
+
+    def test_low_source_quality_flagged(self):
+        from scripts.coverage import compute_research_coverage
+        records = [self._make_record("a.com", quality_score=0.2)] * 5
+        plan = {"research": {"minimum_source_quality_score": 0.6}}
+        summary, findings = compute_research_coverage(records, plan)
+        self.assertTrue(any(f.get("type") == "source_quality" for f in findings))
+
+
+class DpoVerifyTests(unittest.TestCase):
+    def _make_args(self):
+        import argparse
+        return argparse.Namespace(min_instruction_length=12, min_response_length=12, require_evidence=False, allow_injections=False)
+
+    def _make_dpo_record(self, chosen, rejected, dpo_delta=None):
+        meta = {}
+        if dpo_delta:
+            meta["dpo_delta"] = dpo_delta
+        return {
+            "id": "r1", "instruction": "What is the best approach for testing?",
+            "response": {"format": "preference_pair", "chosen": chosen, "rejected": rejected},
+            "metadata": meta, "source_uri": "",
+        }
+
+    def test_empty_rejected_fails(self):
+        from scripts.verify import heuristic_errors
+        record = self._make_dpo_record("A good long response with details and explanation.", "")
+        errors = heuristic_errors(record, self._make_args(), plan={})
+        self.assertTrue(len(errors) > 0)
+
+    def test_refusal_in_rejected_fails_by_default(self):
+        from scripts.verify import heuristic_errors
+        record = self._make_dpo_record("Good response.", "I cannot help with that request.")
+        errors = heuristic_errors(record, self._make_args(), plan={"dpo": {"forbid_refusal_in_rejected": True}})
+        self.assertTrue(any("refusal" in e.lower() or "rejected" in e.lower() for e in errors))
+
+    def test_extreme_length_ratio_fails(self):
+        from scripts.verify import heuristic_errors
+        record = self._make_dpo_record("x" * 1000, "x" * 10)
+        errors = heuristic_errors(record, self._make_args(), plan={"dpo": {"max_length_ratio": 5.0}})
+        self.assertTrue(any("ratio" in e.lower() or "length" in e.lower() or "short" in e.lower() for e in errors))
+
+    def test_clean_dpo_pair_passes(self):
+        from scripts.verify import heuristic_errors
+        record = self._make_dpo_record(
+            "Use parameterized queries to prevent SQL injection. Always validate input on the server side.",
+            "Just sanitize inputs with regex and you should be fine in most cases.",
+            dpo_delta="sql_injection_prevention"
+        )
+        errors = heuristic_errors(record, self._make_args(), plan={"dpo": {"forbid_refusal_in_rejected": True, "require_dpo_delta": True}})
+        dpo_errors = [e for e in errors if "DPO" in e]
+        self.assertEqual(dpo_errors, [])
+
+
+class ClusterKeyTests(unittest.TestCase):
+    def _record(self, **meta):
+        return {"id": "r1", "instruction": "What is the best practice?", "metadata": meta, "source_uri": meta.pop("source_uri", "")}
+
+    def test_scenario_fingerprint_takes_priority(self):
+        from scripts.export import get_cluster_key
+        record = {"id": "r1", "instruction": "Q", "metadata": {"scenario_fingerprint": "scn_abc123", "topic": "other"}, "source_uri": ""}
+        self.assertEqual(get_cluster_key(record), "scn_abc123")
+
+    def test_scenario_is_second_priority(self):
+        from scripts.export import get_cluster_key
+        record = {"id": "r1", "instruction": "Q", "metadata": {"scenario": "login_bypass", "topic": "other"}, "source_uri": ""}
+        self.assertEqual(get_cluster_key(record), "login_bypass")
+
+    def test_evidence_id_used_when_no_scenario(self):
+        from scripts.export import get_cluster_key
+        record = {"id": "r1", "instruction": "Q", "metadata": {"evidence_ids": ["ev_001", "ev_002"]}, "source_uri": ""}
+        key = get_cluster_key(record)
+        self.assertEqual(key, "ev_001")
+
+    def test_fallback_prefixed_with_fallback(self):
+        from scripts.export import get_cluster_key
+        record = {"id": "r1", "instruction": "What is best?", "metadata": {}, "source_uri": ""}
+        key = get_cluster_key(record)
+        self.assertTrue(key.startswith("fallback:"))
+
+
 if __name__ == "__main__":
     unittest.main()

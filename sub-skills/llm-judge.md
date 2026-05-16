@@ -101,3 +101,36 @@ python3 scripts/verify.py --from-status raw_generated --review-file <review.json
 ```
 
 Reference rubric: `resources/references/llm-audit-rubric.md`
+
+## Extended review fields
+
+The legacy review format (`id`, `score`, `reason`, `status`) remains valid. For production runs, prefer extended fields so deterministic verification can enforce each pass separately:
+
+- `structural_pass`: boolean
+- `instruction_following_pass`: boolean
+- `grounding_pass`: boolean
+- `format_pass`: boolean
+- `capability_delta_score`: integer 1–5
+- `unsupported_claims`: list of short strings
+- `evidence_ids_checked`: list of evidence IDs
+- `safety_notes`: string — free-text safety observations persisted as `judge_safety_notes` on the record
+
+If any provided pass flag is false, `verify.py` treats the review as a fail even when `status` was accidentally set to `pass`.
+
+## Review requirements plan keys
+
+Add a `review_requirements` section to your coverage plan to enforce minimum review quality thresholds:
+
+```json
+{
+  "review_requirements": {
+    "min_capability_delta_score": 4,
+    "require_grounding_pass": true,
+    "blocking": true
+  }
+}
+```
+
+- `min_capability_delta_score` (int) — if set and `capability_delta_score` in the review is below this threshold, the record is marked `verified_fail`.
+- `require_grounding_pass` (bool) — if `true`, any review that does not explicitly provide `grounding_pass: true` causes the record to fail.
+- `blocking` — reserved for future build-loop gate integration.

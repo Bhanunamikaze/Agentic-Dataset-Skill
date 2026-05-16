@@ -21,6 +21,7 @@ from scripts.utils.visibility import sanitize_records_for_model_visibility
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_FLAT_SCHEMA = ROOT_DIR / "resources" / "target-schemas" / "csv_columns.json"
+DEFAULT_OUTPUT_DIR = ROOT_DIR / "workspace"
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,8 +50,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42, help="Shuffle seed for dataset splitting.")
     parser.add_argument(
         "--output-dir",
-        default="workspace",
-        help="Directory for exported files and generated data card.",
+        default=str(DEFAULT_OUTPUT_DIR),
+        help=(
+            "Directory for exported files and generated data card. Defaults to "
+            "the same 'workspace/' directory the SQLite state lives in, so the "
+            "default works whether you run from a dev checkout or an installed "
+            "skill copy."
+        ),
     )
     parser.add_argument(
         "--schema-file",
@@ -70,16 +76,39 @@ def parse_args() -> argparse.Namespace:
 
 
 def get_cluster_key(record: dict[str, Any]) -> str:
-    # Try explicit metadata keys often used for scenarios/topics
-    meta = record.get("metadata", {})
-    for key in ("scenario", "topic", "intent", "subtopic", "fingerprint"):
-        if key in meta and meta[key]:
+    import re as _re
+    import hashlib as _hashlib
+    meta = record.get("metadata") or {}
+
+    # 1. scenario_fingerprint (set by research pipeline)
+    if meta.get("scenario_fingerprint"):
+        return str(meta["scenario_fingerprint"])
+
+    # 2. explicit scenario key
+    if meta.get("scenario"):
+        return str(meta["scenario"])
+
+    # 3. existing topic/intent/subtopic/fingerprint
+    for key in ("topic", "intent", "subtopic", "fingerprint"):
+        if meta.get(key):
             return str(meta[key])
-    # Fallback: Hash the first few words of the instruction to cluster similar templates
-    import re
+
+    # 4. first evidence id — keeps records from the same evidence chunk together
+    evidence_ids = meta.get("evidence_ids") or []
+    if isinstance(evidence_ids, list) and evidence_ids:
+        return str(evidence_ids[0])
+    if isinstance(evidence_ids, str) and evidence_ids.strip():
+        return evidence_ids.strip()
+
+    # 5. hash of source_uri
+    source_uri = str(record.get("source_uri") or meta.get("source_uri") or "").strip()
+    if source_uri:
+        return "src_" + _hashlib.sha256(source_uri.encode()).hexdigest()[:12]
+
+    # 6. fallback: first 6 instruction words (prefix with "fallback:" so it can be counted)
     instr = record.get("instruction", "")
-    words = re.findall(r'\w+', instr.lower())[:6]
-    return "_".join(words)
+    words = _re.findall(r"\w+", instr.lower())[:6]
+    return "fallback:" + "_".join(words)
 
 def split_records(
     records: list[dict[str, Any]],

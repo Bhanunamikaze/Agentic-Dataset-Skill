@@ -1,0 +1,56 @@
+{
+  "target_effective_count": 300,
+  "group_fields": ["metadata.domain", "metadata.difficulty"],
+  "group_minimums": {
+    "metadata.domain=python": 50,
+    "metadata.domain=javascript": 50,
+    "metadata.domain=rust": 40,
+    "metadata.domain=go": 40,
+    "metadata.domain=sql": 40,
+    "metadata.difficulty=easy": 50,
+    "metadata.difficulty=medium": 150,
+    "metadata.difficulty=hard": 100
+  },
+  "response_length": {
+    "minimum_chars": 400,
+    "enforce": true
+  },
+  "quality_filter": {
+    "task_relative_minimums": true,
+    "anti_trope": true
+  },
+  "syntax_checks": {
+    "python": true,
+    "json": true
+  },
+  "code_quality": {
+    "enabled": true,
+    "python_ast": true,
+    "json": true,
+    "javascript_balance": true,
+    "shell_balance": false,
+    "sql_balance": true
+  },
+  "dpo_audit": {
+    "enabled": false,
+    "require_delta": false,
+    "min_chosen_chars": 0,
+    "min_rejected_chars": 0,
+    "max_length_ratio": 3.0
+  },
+  "benchmark_contamination": {
+    "enabled": true,
+    "blocking": true
+  },
+  "grounding": {
+    "require_evidence_ids": false,
+    "minimum_response_evidence_overlap": 0.0
+  },
+  "provenance": {
+    "field": "metadata.source_origin",
+    "real_world_values": ["real_world"],
+    "minimum_real_world_share": 0.4,
+    "reference_fields": ["metadata.reference_urls", "source_uri"],
+    "blocking": false
+  }
+}

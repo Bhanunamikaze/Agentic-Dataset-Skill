@@ -175,3 +175,17 @@ python3 scripts/generate.py --topic "<topic>" [--count <n>] --task-type <sft|dpo
 ```
 
 If `--count` is omitted, the placeholder target defaults to `500`.
+
+## Evidence-linked records
+
+When using `scripts/research.py`, draft records from `evidence.jsonl` and preserve traceability:
+
+- `metadata.evidence_ids`: evidence chunk IDs used to create the record
+- `metadata.reference_urls`: source URLs used
+- `metadata.source_domain`: domain or `local`
+- `metadata.source_quality_score`: source score from research
+- `source_uri`: primary source URL/path
+
+When drafting records from `evidence.jsonl`, copy `metadata.scenario_fingerprint` from the evidence row into the canonical record's metadata. This prevents split leakage by ensuring all records derived from the same evidence cluster receive the same cluster key, so they land together in the same train or test split rather than being scattered across both.
+
+Do not place answer-bearing labels or mechanisms in model-visible `instruction` or `context`; keep them in metadata and use `model_visibility` during export.

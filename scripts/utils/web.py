@@ -56,10 +56,15 @@ except ImportError:
     HAS_BS4 = False
 
 try:
-    from duckduckgo_search import DDGS as _DDGS  # type: ignore[import]
+    from ddgs import DDGS as _DDGS  # type: ignore[import]
     HAS_DDGS = True
 except ImportError:
-    HAS_DDGS = False
+    try:
+        from duckduckgo_search import DDGS as _DDGS  # type: ignore[import]
+        HAS_DDGS = True
+    except ImportError:
+        HAS_DDGS = False
+        _DDGS = None  # type: ignore[assignment,misc]
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +106,13 @@ class LocalFile:
 # HTTP fetch
 # ---------------------------------------------------------------------------
 
-def fetch_url(url: str, *, timeout: int = _DEFAULT_TIMEOUT) -> WebPage:
+def fetch_url(
+    url: str,
+    *,
+    timeout: int = _DEFAULT_TIMEOUT,
+    max_bytes: int = 2_000_000,
+    allowed_content_types: tuple[str, ...] = ("text/html", "application/xhtml+xml", "text/plain"),
+) -> WebPage:
     """Fetch a URL and return its raw HTML content.
 
     Uses ``requests`` if available, falls back to ``urllib``.
@@ -111,13 +122,37 @@ def fetch_url(url: str, *, timeout: int = _DEFAULT_TIMEOUT) -> WebPage:
     if HAS_REQUESTS:
         try:
             resp = _requests.get(
-                url, headers=headers, timeout=timeout, allow_redirects=True
+                url, headers=headers, timeout=timeout, allow_redirects=True, stream=True
             )
+            ct = resp.headers.get("content-type", "")
+            ct_base = ct.split(";")[0].strip()
+            if allowed_content_types and not any(ct.startswith(prefix) for prefix in allowed_content_types):
+                return WebPage(
+                    url=str(resp.url),
+                    status=resp.status_code,
+                    content_type=ct,
+                    html_content="",
+                    error=f"disallowed content-type: {ct_base}",
+                )
+            chunks: list[bytes] = []
+            total = 0
+            truncated = False
+            for chunk in resp.iter_content(chunk_size=65536):
+                if chunk:
+                    total += len(chunk)
+                    chunks.append(chunk)
+                    if total > max_bytes:
+                        truncated = True
+                        break
+            raw_bytes = b"".join(chunks)
+            text = raw_bytes.decode("utf-8", errors="replace")
+            error: str | None = "max_bytes exceeded" if truncated else None
             return WebPage(
-                url=resp.url,
+                url=str(resp.url),
                 status=resp.status_code,
-                content_type=resp.headers.get("content-type", ""),
-                html_content=resp.text,
+                content_type=ct,
+                html_content=text,
+                error=error,
             )
         except Exception as exc:
             return WebPage(url=url, status=0, content_type="", html_content="", error=str(exc))
@@ -127,7 +162,19 @@ def fetch_url(url: str, *, timeout: int = _DEFAULT_TIMEOUT) -> WebPage:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             content_type = resp.headers.get("content-type", "")
-            raw = resp.read()
+            ct_base = content_type.split(";")[0].strip()
+            if allowed_content_types and not any(content_type.startswith(prefix) for prefix in allowed_content_types):
+                return WebPage(
+                    url=url,
+                    status=resp.status,
+                    content_type=content_type,
+                    html_content="",
+                    error=f"disallowed content-type: {ct_base}",
+                )
+            raw = resp.read(max_bytes + 1)
+            truncated = len(raw) > max_bytes
+            if truncated:
+                raw = raw[:max_bytes]
             encoding = "utf-8"
             if "charset=" in content_type:
                 encoding = content_type.split("charset=")[-1].split(";")[0].strip()
@@ -136,7 +183,11 @@ def fetch_url(url: str, *, timeout: int = _DEFAULT_TIMEOUT) -> WebPage:
             except (LookupError, UnicodeDecodeError):
                 text = raw.decode("utf-8", errors="replace")
             return WebPage(
-                url=url, status=resp.status, content_type=content_type, html_content=text
+                url=url,
+                status=resp.status,
+                content_type=content_type,
+                html_content=text,
+                error="max_bytes exceeded" if truncated else None,
             )
     except Exception as exc:
         return WebPage(url=url, status=0, content_type="", html_content="", error=str(exc))
@@ -526,3 +577,89 @@ def chunk_text(
             final.append(" ".join(sub))
 
     return [c for c in final if c.strip()]
+
+
+# ---------------------------------------------------------------------------
+# Research-module helpers
+# ---------------------------------------------------------------------------
+
+def is_url_fetchable(url: str, *, allow_private_network: bool = False) -> bool:
+    """Return whether a URL is safe for default research fetching."""
+    parsed = urllib.parse.urlsplit(str(url or ""))
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    if allow_private_network:
+        return True
+    if host in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}:
+        return False
+    try:
+        import ipaddress
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
+            return False
+    except ValueError:
+        pass
+    return True
+
+
+class RateLimiter:
+    """Per-domain rate limiter. Thread-safe within a single process."""
+
+    def __init__(self, per_domain_seconds: float = 1.0) -> None:
+        self._per_domain_seconds = per_domain_seconds
+        self._last: dict[str, float] = {}
+
+    def wait(self, url: str) -> None:
+        if self._per_domain_seconds <= 0:
+            return
+        host = urllib.parse.urlsplit(str(url or "")).hostname or ""
+        now = time.monotonic()
+        last = self._last.get(host, 0.0)
+        gap = now - last
+        if gap < self._per_domain_seconds:
+            time.sleep(self._per_domain_seconds - gap)
+        self._last[host] = time.monotonic()
+
+
+def search_web_all_backends(
+    query: str,
+    *,
+    max_results: int = 10,
+    rate_limit_seconds: float = 1.0,
+) -> list[SearchResult]:
+    """Search all available backends and deduplicate results by URL.
+
+    Unlike search_web(), this does not stop at the first backend. It is intended
+    for research/evidence collection where domain diversity matters more than a
+    single fallback chain result.
+    """
+    all_results: list[SearchResult] = []
+    for backend in (
+        _search_serpapi,
+        _search_bing,
+        _search_google_cse,
+        _search_duckduckgo_lib,
+        _search_duckduckgo_html,
+    ):
+        try:
+            results = backend(query, max_results)
+        except Exception:
+            results = []
+        if results:
+            all_results.extend(results)
+            time.sleep(rate_limit_seconds)
+
+    seen: set[str] = set()
+    unique: list[SearchResult] = []
+    for result in all_results:
+        url = str(result.url or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        unique.append(result)
+        if len(unique) >= max_results:
+            break
+    return unique

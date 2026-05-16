@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import glob
 import json
 import subprocess
@@ -297,6 +298,59 @@ def build_export_args(args: argparse.Namespace, db_path: Path, output_dir: Path)
     return command
 
 
+def detect_batch_drift(prev_coverage: dict, curr_coverage: dict) -> dict:
+    """Compare two consecutive coverage dicts and return drift signals."""
+    empty = {
+        "drift_score": 0.0,
+        "drift_flag": False,
+        "pass_rate_delta": 0.0,
+        "gap_count_delta": 0,
+        "new_gaps": [],
+        "resolved_gaps": [],
+    }
+    if not prev_coverage or not curr_coverage:
+        return empty
+
+    def _pass_rate(cov: dict) -> float:
+        total = cov.get("records_examined", 0)
+        effective = cov.get("effective_count", 0)
+        if not total:
+            return 0.0
+        return effective / total
+
+    def _gap_keys(cov: dict) -> set[str]:
+        gaps = cov.get("coverage_gaps") or []
+        result: set[str] = set()
+        for item in gaps:
+            name = item.get("name", "")
+            value = item.get("value", "")
+            result.add(f"{name}={value}")
+        return result
+
+    prev_rate = _pass_rate(prev_coverage)
+    curr_rate = _pass_rate(curr_coverage)
+    pass_rate_delta = curr_rate - prev_rate
+
+    prev_gaps = _gap_keys(prev_coverage)
+    curr_gaps = _gap_keys(curr_coverage)
+
+    new_gaps = sorted(curr_gaps - prev_gaps)
+    resolved_gaps = sorted(prev_gaps - curr_gaps)
+    gap_count_delta = len(curr_gaps) - len(prev_gaps)
+
+    drift_score = abs(pass_rate_delta) + 0.05 * abs(gap_count_delta)
+    drift_flag = drift_score > 0.10
+
+    return {
+        "drift_score": round(drift_score, 6),
+        "drift_flag": drift_flag,
+        "pass_rate_delta": round(pass_rate_delta, 6),
+        "gap_count_delta": gap_count_delta,
+        "new_gaps": new_gaps,
+        "resolved_gaps": resolved_gaps,
+    }
+
+
 def coverage_complete(coverage: dict[str, Any], *, plan: dict[str, Any]) -> bool:
     if not plan:
         return False
@@ -336,6 +390,18 @@ def coverage_complete(coverage: dict[str, Any], *, plan: dict[str, Any]) -> bool
             not section_is_blocking(plan, "response_prefix")
             or not coverage.get("response_prefix_findings")
         )
+        and (
+            not section_is_blocking(plan, "research")
+            or not coverage.get("research_findings")
+        )
+        and (
+            not section_is_blocking(plan, "dpo")
+            or not coverage.get("dpo_findings")
+        )
+        and (
+            not section_is_blocking(plan, "review_requirements")
+            or not coverage.get("review_requirements_findings")
+        )
     )
 
 
@@ -353,11 +419,21 @@ def main() -> None:
         else default_output_dir(session_id)
     )
 
+    progress_path = WORKSPACE_DIR / "build_loop_progress.json"
+
+    def write_progress(data: dict) -> None:
+        try:
+            progress_path.parent.mkdir(parents=True, exist_ok=True)
+            progress_path.write_text(json.dumps(data, indent=2, ensure_ascii=True))
+        except Exception:
+            pass
+
     summary: dict[str, Any] = {
         "session_id": session_id,
         "db_path": str(db_path),
         "batches_requested": [str(path) for path in batch_paths],
         "batches_processed": [],
+        "drift_history": [],
         "skip_verify": args.skip_verify,
         "skip_dedup": args.skip_dedup,
         "review_file": args.review_file,
@@ -370,7 +446,20 @@ def main() -> None:
         "export": None,
     }
 
-    for batch_path in batch_paths:
+    write_progress({
+        "session_id": session_id,
+        "batches_total": len(batch_paths),
+        "batches_done": 0,
+        "last_batch_path": None,
+        "last_coverage": None,
+        "last_drift": None,
+        "complete": False,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    })
+
+    prev_coverage: dict = {}
+
+    for k, batch_path in enumerate(batch_paths):
         batch_summary: dict[str, Any] = {
             "path": str(batch_path),
             "generate": run_json_script("generate.py", build_generate_args(args, batch_path, db_path)),
@@ -386,9 +475,26 @@ def main() -> None:
             batch_summary["dedup"] = run_json_script("dedup.py", build_dedup_args(args, db_path))
 
         batch_summary["coverage"] = run_json_script("coverage.py", build_coverage_args(args, db_path))
+
+        drift = detect_batch_drift(prev_coverage, batch_summary["coverage"])
+        batch_summary["drift"] = drift
+        prev_coverage = batch_summary["coverage"]
+
         summary["batches_processed"].append(batch_summary)
+        summary["drift_history"].append(drift)
         summary["final_coverage"] = batch_summary["coverage"]
         summary["complete"] = coverage_complete(batch_summary["coverage"], plan=plan)
+
+        write_progress({
+            "session_id": session_id,
+            "batches_total": len(batch_paths),
+            "batches_done": k + 1,
+            "last_batch_path": str(batch_path),
+            "last_coverage": batch_summary["coverage"],
+            "last_drift": drift,
+            "complete": False,
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+        })
 
         if summary["complete"] and not args.keep_going:
             summary["stop_reason"] = "coverage_plan_satisfied"
@@ -403,6 +509,17 @@ def main() -> None:
             build_export_args(args, db_path, output_dir),
         )
         summary["export"]["output_dir"] = str(output_dir)
+
+    write_progress({
+        "session_id": session_id,
+        "batches_total": len(batch_paths),
+        "batches_done": len(summary["batches_processed"]),
+        "last_batch_path": str(batch_paths[-1]) if batch_paths else None,
+        "last_coverage": summary["final_coverage"],
+        "last_drift": summary["drift_history"][-1] if summary["drift_history"] else None,
+        "complete": summary["complete"],
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    })
 
     if args.report:
         write_json(args.report, summary)

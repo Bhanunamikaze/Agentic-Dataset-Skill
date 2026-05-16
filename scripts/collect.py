@@ -521,8 +521,13 @@ def main() -> None:
             "path_count": len(args.paths or []),
         },
         "next_step": (
-            f"python3 scripts/generate.py --input {output_path} "
-            f"--source-type url_reference --tool-context {args.tool_context}"
+            "Convert collected raw chunks into canonical draft records before import. "
+            "For deeper sourcing, run scripts/research.py to create evidence.jsonl, "
+            "then draft records with metadata.evidence_ids/reference_urls."
+        ),
+        "warning": (
+            "Records with status=collected are raw source material. "
+            "They must not be verified/exported as training examples directly."
         ),
     }
 

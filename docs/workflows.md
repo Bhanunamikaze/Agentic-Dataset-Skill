@@ -172,3 +172,75 @@ Example:
   ]
 }
 ```
+
+## Research/Evidence Flow
+
+Use this before `Generate Flow` when the dataset should be grounded in real-world material.
+
+1. Run `scripts/research.py` with the user request and coverage plan.
+2. Review `research_plan.json`, `sources.jsonl`, `evidence.jsonl`, and `coverage_report.json`.
+3. Draft canonical records from evidence chunks; do not copy raw chunks as assistant responses.
+4. Put provenance on each real-world record: `metadata.evidence_ids`, `metadata.reference_urls`, `metadata.source_domain`, `metadata.source_quality_score`, and `source_uri`.
+5. Import drafted records with `scripts/generate.py --dedup-threshold 0.85`.
+
+`collect.py` remains a low-level fetch/chunk fallback. Its output has `status: collected` and should be treated as raw source material, not a finished dataset.
+
+## Advanced collection flags
+
+`scripts/research.py` accepts these optional flags for tighter control:
+
+- `--max-sources-per-domain N` (default 5) — caps sources per domain to prevent one site dominating evidence.
+- `--max-bytes N` (default 2 000 000) — aborts fetches beyond N bytes; returns partial content.
+- `--allowed-content-types TYPE ...` — restrict fetching to specific content-type prefixes.
+- `--per-domain-rate-limit SECONDS` — per-host rate limit (defaults to `--rate-limit`).
+
+`scripts/dedup.py` flags:
+
+- `--strategy {shingle,tfidf,minhash}` — near-duplicate detection algorithm. `minhash` uses a deterministic MinHash estimator.
+- `--code-aware` — normalizes Python code blocks (variable rename, comment strip) before dedup comparison.
+
+## Optional GPT Researcher Backend
+
+The native research module is the default because the skill avoids mandatory external LLM-provider API calls. When a user explicitly wants autonomous deep research and has the required API keys, install optional dependencies and run:
+
+```bash
+python3 -m pip install -r requirements-research.txt
+python3 scripts/research.py --backend gpt_researcher --query "<topic>"
+```
+
+The adapter converts GPT Researcher context/sources into this repo's `sources.jsonl` and `evidence.jsonl` artifacts so downstream generation, verification, coverage, audit, and export stay unchanged.
+
+# Production Quality Hardening
+
+This reference describes optional gates for serious fine-tuning runs.
+
+## Code quality
+
+Enable `code_quality.enabled` to add AST-aware Python checks, JSON parsing, and delimiter/quote balance checks for JavaScript, shell, and SQL snippets.
+
+## Code-aware deduplication
+
+Use:
+
+```bash
+python3 scripts/dedup.py --from-status verified_pass --strategy code --threshold 0.92
+```
+
+For import-time duplicate rejection, use:
+
+```bash
+python3 scripts/generate.py --input drafts.jsonl --dedup-threshold 0.92 --dedup-strategy code
+```
+
+## DPO pair quality
+
+Enable `dpo_audit.enabled` to reject empty/identical chosen-rejected pairs, refusal-like rejected responses, missing `metadata.dpo_delta`, implausibly short rejected responses, and excessive chosen/rejected length skew.
+
+## Benchmark contamination
+
+Enable `benchmark_contamination.enabled` to block common public-benchmark fingerprints. This is not a complete detector; it is a deterministic guardrail that forces re-drafting of suspicious records.
+
+## Semantic review batching
+
+Use `scripts/review_batch.py` to build a host-agent review prompt and validate review JSONL without requiring local scripts to call external LLM APIs.
+

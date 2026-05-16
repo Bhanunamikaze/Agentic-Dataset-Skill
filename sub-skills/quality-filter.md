@@ -48,3 +48,17 @@ If the record fails deterministic checks, mark it as failed before asking for a 
 ```bash
 python3 scripts/verify.py --from-status raw_generated --from-status augmented
 ```
+
+## Plan-driven deterministic implementation
+
+`verify.py` now supports plan-driven deterministic checks:
+
+```json
+{
+  "quality_filter": {"task_relative_minimums": true},
+  "syntax_checks": {"python": true, "json": true},
+  "grounding": {"require_evidence_ids": true, "blocking": true}
+}
+```
+
+Task-relative minimums are opt-in through the plan to avoid breaking short-label classification corpora.

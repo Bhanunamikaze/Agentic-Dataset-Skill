@@ -72,3 +72,32 @@ Each DPO record must use `response.format: "preference_pair"` with:
 ```
 
 Include a `metadata.dpo_delta` field briefly describing the exact flaw in the rejected response. This aids later auditing.
+
+## Deterministic DPO audit gate
+
+For production DPO runs, enable `dpo_audit.enabled` in the plan. This catches empty/identical chosen-rejected pairs, missing `metadata.dpo_delta`, refusal-like rejected responses, weak hard negatives, and excessive length skew.
+
+## Coverage plan keys
+
+Add a `dpo` section to your coverage plan to enforce DPO-specific quality gates:
+
+```json
+{
+  "dpo": {
+    "min_chosen_length": 30,
+    "min_rejected_length": 30,
+    "max_length_ratio": 8.0,
+    "require_dpo_delta": true,
+    "forbid_refusal_in_rejected": true,
+    "min_pair_count": 500,
+    "max_mean_length_ratio": 3.0,
+    "max_share_per_delta": 0.6,
+    "blocking": true
+  }
+}
+```
+
+- `min_pair_count` — minimum number of preference_pair records required before the corpus is considered complete.
+- `max_mean_length_ratio` — maximum allowed ratio of `mean(chosen_length) / mean(rejected_length)` (or vice versa). Flags corpora where one side is systematically much longer than the other. Defaults to 3.0 when not set.
+- `max_share_per_delta` — maximum share of pairs that may share the same `metadata.dpo_delta` value. Prevents delta-type concentration.
+- `blocking: true` — when set, any `dpo_findings` produced by `coverage.py` will block build loop completion.
