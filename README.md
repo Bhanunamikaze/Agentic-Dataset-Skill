@@ -124,19 +124,19 @@ curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/
 curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.sh | bash -s -- --online --target all --project-dir /path/to/your/project
 ```
 
-**Windows (PowerShell 7+):**
+**Windows (PowerShell):**
 ```powershell
 # Download installer, then run with --online
 irm https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.ps1 -OutFile install.ps1
 
 # Default: installs to every target at once
-pwsh ./install.ps1 --online
+.\install.ps1 --online
 
 # Claude Code only
-pwsh ./install.ps1 --online --target claude
+.\install.ps1 --online --target claude
 
 # Every target, scoped to a project
-pwsh ./install.ps1 --online --target all --project-dir C:\path\to\your\project
+.\install.ps1 --online --target all --project-dir C:\path\to\your\project
 ```
 
 ### From source
