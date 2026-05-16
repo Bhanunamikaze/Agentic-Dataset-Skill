@@ -5,4 +5,4 @@ jsonschema>=4.26,<5
 requests>=2.31,<3
 beautifulsoup4>=4.12,<5
 trafilatura>=1.12,<2
-duckduckgo-search>=6.1,<8
+duckduckgo-search>=8.1.1,<9
