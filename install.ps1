@@ -68,7 +68,7 @@ Each IDE target installs the skill in that IDE's native format:
   continue                      ->  .continue\prompts\dataset-generator.prompt
 
 Usage:
-  pwsh ./install.ps1 [options]
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 [options]
 
 Options:
   --target <target>
@@ -100,13 +100,13 @@ Options:
   -h, --help                   Show this help
 
 Examples:
-  pwsh ./install.ps1 --target claude
-  pwsh ./install.ps1 --target global
-  pwsh ./install.ps1 --target project --project-dir C:\path\to\your\project
-  pwsh ./install.ps1 --target cursor  --project-dir C:\path\to\your\project
-  pwsh ./install.ps1 --target all     --project-dir C:\path\to\your\project
-  pwsh ./install.ps1 --online
-  pwsh ./install.ps1 --online --ref develop
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 --target claude
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 --target global
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 --target project --project-dir C:\path\to\your\project
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 --target cursor  --project-dir C:\path\to\your\project
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 --target all     --project-dir C:\path\to\your\project
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 --online
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 --online --ref develop
 '@ | Write-Host
 }
 

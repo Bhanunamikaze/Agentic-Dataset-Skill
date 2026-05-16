@@ -82,37 +82,37 @@ iwr https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/in
 Install every supported target:
 
 ```powershell
-.\install.ps1 --online
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --online
 ```
 
 Claude Code only:
 
 ```powershell
-.\install.ps1 --online --target claude
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --online --target claude
 ```
 
 Codex CLI only:
 
 ```powershell
-.\install.ps1 --online --target codex
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --online --target codex
 ```
 
 User-wide install across Claude, Codex, and Antigravity:
 
 ```powershell
-.\install.ps1 --online --target global
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --online --target global
 ```
 
 Auto-detected install across every supported target for a project:
 
 ```powershell
-.\install.ps1 --online --target all --project-dir C:\path\to\your\project
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --online --target all --project-dir C:\path\to\your\project
 ```
 
 Pin a release tag:
 
 ```powershell
-.\install.ps1 --online --ref v0.1.0 --target codex --force
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --online --ref v0.1.0 --target codex --force
 ```
 
 ## Install From Source
@@ -201,7 +201,7 @@ PowerShell equivalent:
 ```powershell
 iwr https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.ps1 -OutFile install.ps1
 notepad install.ps1
-.\install.ps1 --online --target codex
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --online --target codex
 ```
 
 ## Installer Flags
@@ -357,5 +357,5 @@ Or just install the requirements file from your source checkout.
 If PowerShell blocks local scripts, run PowerShell as a user with script execution allowed, or use:
 
 ```powershell
-pwsh -ExecutionPolicy Bypass -File ./install.ps1 --online --target codex
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --online --target codex
 ```

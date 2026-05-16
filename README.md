@@ -126,17 +126,17 @@ curl -fsSL https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/
 
 **Windows (PowerShell):**
 ```powershell
-# Download installer, then run with --online
+# Download installer, then run with execution policy bypass
 irm https://raw.githubusercontent.com/Bhanunamikaze/AI-Dataset-Generator/main/install.ps1 -OutFile install.ps1
 
 # Default: installs to every target at once
-.\install.ps1 --online
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --online
 
 # Claude Code only
-.\install.ps1 --online --target claude
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --online --target claude
 
 # Every target, scoped to a project
-.\install.ps1 --online --target all --project-dir C:\path\to\your\project
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --online --target all --project-dir C:\path\to\your\project
 ```
 
 ### From source
@@ -187,9 +187,9 @@ bash install.sh --target claude --install-deps
 
 **Windows (PowerShell) — from source:**
 ```powershell
-.\install.ps1 --target claude
-.\install.ps1 --target cursor --project-dir C:\path\to\project
-.\install.ps1 --target all    --project-dir C:\path\to\project
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --target claude
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --target cursor --project-dir C:\path\to\project
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --target all    --project-dir C:\path\to\project
 ```
 
 **Safer remote install (download, inspect, run):**
