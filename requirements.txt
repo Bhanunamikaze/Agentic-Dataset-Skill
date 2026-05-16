@@ -1,4 +1,5 @@
 jsonschema>=4.26,<5
+pytest>=7.0
 
 # Optional: required only for scripts/collect.py (local web/URL/file collector)
 # Install with: python3 -m pip install -r requirements.txt
