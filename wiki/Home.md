@@ -4,9 +4,9 @@ AI Dataset Generator is a tool-native dataset pipeline for Claude Code, Codex, A
 
 | At a glance | Current state |
 |---|---|
-| Latest release tag | `v0.1.0` |
-| Sub-skills | 13 |
-| Pipeline scripts | 14 |
+| Latest release tag | `v0.6.0` |
+| Sub-skills | 14 |
+| Pipeline scripts | 19 |
 | Utility modules | 15 (in `scripts/utils/`) |
 | Test suite | 2769 lines (`tests/test_pipeline.py`) |
 | Main deliverables | `DATA_CARD.md`, `AUDIT_REPORT.md`, `canonical_train.jsonl`, exported dataset files |
@@ -20,7 +20,7 @@ AI Dataset Generator is a tool-native dataset pipeline for Claude Code, Codex, A
 | Copy a complete prompt | [[Example Prompts]] | Long-form prompts for SFT, DPO, URL conversion, research grounding, normalization, audit, red-team, and custom export. |
 | Understand the generation flow | [[Generation Workflow]] | Strategy → seed/collect → batch build loop → verify → review → dedup → export, mapped to the actual scripts. |
 | Inspect generated artifacts | [[Datasets and Exports]] | `run_state.sqlite`, `canonical_train.jsonl`, `DATA_CARD.md`, `AUDIT_REPORT.md`, `QUALITY_REPORT.json`, and every export format. |
-| Find a script | [[Script Inventory]] | Start-here groupings plus the full 14-script + 15-utility-module inventory. |
+| Find a script | [[Script Inventory]] | Start-here groupings plus the full 19-script + 15-utility-module inventory. |
 | Package or release | [[Release and Packaging]] | Runtime allowlist, tag publishing workflow, and `--online --ref` install resolution. |
 | Fix common failures | [[Troubleshooting]] | SQLite locks, dedup thresholds, refusal-regex misfires, missing evidence ids, grounding gaps, Playwright, and split leakage. |
 
@@ -85,8 +85,10 @@ A run is only complete when post-dedup effective count and every coverage-plan b
 | Source collection | `scripts/collect.py`, `scripts/research.py`, `scripts/browser_collect.py`, `scripts/grounding.py` |
 | Generation orchestration | `scripts/generate.py`, `scripts/augment.py`, `scripts/build_loop.py`, `scripts/coverage.py` |
 | Verification and review | `scripts/verify.py`, `scripts/dedup.py`, `scripts/review_batch.py`, `sub-skills/llm-judge.md` |
+| Agent observability | `scripts/status.py`, `scripts/draft_self_check.py`, `scripts/judge_insights.py`, `scripts/record_history.py` |
+| Drift & lineage | `scripts/build_loop.py` (drift detection + progress file), `sub-skills/agent-loop.md` |
 | Audit and export | `scripts/audit.py`, `scripts/quality_report.py`, `scripts/export.py` |
-| Resources | `resources/internal-schema/canonical_schema.json`, `resources/target-schemas/`, `resources/templates/custom_flat_schema.json` |
+| Resources | `resources/examples/` (7 reference files), `resources/templates/` (8 coverage plans), `resources/internal-schema/`, `resources/target-schemas/` |
 
 ## Source of Truth
 
