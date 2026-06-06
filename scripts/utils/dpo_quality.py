@@ -7,9 +7,17 @@ REFUSAL_RE = re.compile(r"\b(i cannot|i can'?t|as an ai|sorry,? but|unable to co
 
 
 def dpo_pair_errors(record: Mapping[str, Any], plan: Mapping[str, Any]) -> list[str]:
-    config = plan.get("dpo_audit") or {}
-    if not isinstance(config, Mapping) or not config.get("enabled"):
+    config = plan.get("dpo_audit") or plan.get("dpo") or {}
+    if not isinstance(config, Mapping):
         return []
+    
+    enabled = config.get("enabled")
+    if enabled is None:
+        enabled = len(config) > 0
+        
+    if not enabled:
+        return []
+        
     response = record.get("response") or {}
     if not isinstance(response, Mapping) or response.get("format") != "preference_pair":
         return []
@@ -31,9 +39,18 @@ def dpo_pair_errors(record: Mapping[str, Any], plan: Mapping[str, Any]) -> list[
         ratio = max(len(chosen), len(rejected)) / max(min(len(chosen), len(rejected)), 1)
         if ratio > max_ratio:
             errors.append(f"DPO chosen/rejected length ratio {ratio:.2f} exceeds {max_ratio:.2f}")
-    if config.get("require_delta", True) and not (record.get("metadata") or {}).get("dpo_delta"):
+            
+    require_delta = config.get("require_delta")
+    if require_delta is None:
+        require_delta = config.get("require_dpo_delta")
+    if require_delta is None:
+        require_delta = "dpo_audit" in plan
+        
+    if require_delta and not (record.get("metadata") or {}).get("dpo_delta"):
         errors.append("DPO record missing metadata.dpo_delta")
-    if REFUSAL_RE.search(rejected):
+        
+    forbid_refusal = config.get("forbid_refusal_in_rejected", True)
+    if forbid_refusal and REFUSAL_RE.search(rejected):
         errors.append("DPO rejected response looks like a refusal instead of a plausible hard negative")
     # A refusal in the chosen response is worse than one in rejected: it teaches
     # the model to refuse the correct answer. Always flag it.

@@ -456,7 +456,10 @@ def apply_review(record: dict[str, Any], review: dict[str, Any] | None, plan: di
     status = str(review.get("status", "")).strip().lower()
     score = review.get("score")
     reason = review.get("reason")
-    int_score = int(str(score)) if score not in (None, "") else None
+    try:
+        int_score = int(str(score)) if score not in (None, "") else None
+    except ValueError:
+        return "verified_fail", "fail", None, "invalid judge score format"
 
     safety_notes = review.get("safety_notes")
     if safety_notes:

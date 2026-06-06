@@ -2434,9 +2434,9 @@ class ResearchPipelineTests(unittest.TestCase):
                 per_domain_rate_limit=None,
             )
             from scripts.research import run_native_backend
-            with unittest.mock.patch("scripts.utils.web.search_web_all_backends", side_effect=self._fake_search), \
-                 unittest.mock.patch("scripts.utils.web.fetch_url", side_effect=self._fake_fetch), \
-                 unittest.mock.patch("scripts.utils.web.extract_text", side_effect=self._fake_extract):
+            with unittest.mock.patch("scripts.research.search_web_all_backends", side_effect=self._fake_search), \
+                 unittest.mock.patch("scripts.research.fetch_url", side_effect=self._fake_fetch), \
+                 unittest.mock.patch("scripts.research.extract_text", side_effect=self._fake_extract):
                 summary = run_native_backend(args, output_dir)
             self.assertTrue(Path(summary["research_plan"]).exists())
             self.assertTrue(Path(summary["sources"]).exists())
@@ -2716,15 +2716,18 @@ class DpoVerifyTests(unittest.TestCase):
 
     def test_refusal_in_rejected_fails_by_default(self):
         from scripts.verify import heuristic_errors
-        record = self._make_dpo_record("Good response.", "I cannot help with that request.")
+        record = self._make_dpo_record(
+            "This is a very good and extremely long response that definitely exceeds forty characters.",
+            "I apologize, but I cannot help with that request. I must refuse because of safety guidelines."
+        )
         errors = heuristic_errors(record, self._make_args(), plan={"dpo": {"forbid_refusal_in_rejected": True}})
         self.assertTrue(any("refusal" in e.lower() or "rejected" in e.lower() for e in errors))
 
     def test_extreme_length_ratio_fails(self):
         from scripts.verify import heuristic_errors
-        record = self._make_dpo_record("x" * 1000, "x" * 10)
+        record = self._make_dpo_record("x" * 1000, "x" * 100)
         errors = heuristic_errors(record, self._make_args(), plan={"dpo": {"max_length_ratio": 5.0}})
-        self.assertTrue(any("ratio" in e.lower() or "length" in e.lower() or "short" in e.lower() for e in errors))
+        self.assertTrue(any("ratio" in e.lower() for e in errors))
 
     def test_clean_dpo_pair_passes(self):
         from scripts.verify import heuristic_errors
